@@ -90,7 +90,14 @@ MergeSortAlgorithm-master/
 │   │   │   ├── replay.py        # apply_step_sequence utilities
 │   │   │   └── step.py          # Step dataclass / contract
 │   │   ├── presets/             # Saved demos and themes
-│   │   └── ui/                  # Qt Designer assets / placeholders
+│   │   ├── ui_compare/
+│   │   │   ├── controller.py
+│   │   │   └── window.py
+│   │   ├── ui_shared/
+│   │   │   ├── constants.py
+│   │   │   └── theme.py
+│   │   └── ui_single/
+│   │       └── window.py
 │   └── sorting_viz.egg-info/ …
 ├── tests/
 │   ├── conftest.py              # Spins up shared QApplication
@@ -132,8 +139,12 @@ The application has been verified on macOS 14, Windows 11, and Ubuntu 24.10 with
 - `AlgorithmVisualizerBase` renders the metadata card beside the canvas, showing traits (stable/in-place/comparison), complexity table, and notes.
 - The panel updates automatically with new algorithms, keeping documentation, narration, and UI in sync.
 
+### Modular Launcher
+- The application now starts with a launcher window, allowing users to choose between different modes: a single algorithm visualizer, a compare mode, and a planned dataset batch mode.
+- The UI has been refactored into a modular structure with separate modules for the single view (`ui_single`), compare view (`ui_compare`), and shared UI elements (`ui_shared`).
+
 ### Compare Mode
-- The “Compare” tab embeds two visualizers in a linked split view.
+- Launched from the main launcher, the “Compare” tab embeds two visualizers in a linked split view.
 - Shared controls drive both algorithms: seed-safe generation, play/pause, single-step, and resets remain synchronised.
 - Algorithm selectors make it easy to juxtapose stable vs. unstable variants or explore different complexity classes side by side.
 
