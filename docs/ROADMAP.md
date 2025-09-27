@@ -63,18 +63,18 @@ This document outlines the plan to elevate the project to a production-grade app
 - [ ] **Toolbar & Menu Bar:**
     - [ ] Create a main toolbar and menu bar with shortcuts.
 - [ ] **Themes:**
-    - [ ] Dark (default) + Light theme toggle.
-    - [ ] Persist theme in `QSettings`.
-- [ ] **Data Presets Menu:**
-    - [ ] Add a menu for generating different kinds of data (random, nearly sorted, etc.).
-- [ ] **Side-by-Side Compare Mode:**
-    - [ ] Implement a split view to run two algorithms on the same data.
-- [ ] **Explanations Panel:**
-    - [ ] Add a panel with a description and complexity table for each algorithm.
+    - [x] Dark (default) + Light (high-contrast) theme toggle.
+    - [x] Persist theme in `QSettings`.
+- [x] **Data Presets Menu:**
+    - [x] Add a menu for generating different kinds of data (random, nearly sorted, etc.).
+- [x] **Side-by-Side Compare Mode:**
+    - [x] Implement a split view to run two algorithms on the same data.
+- [x] **Explanations Panel:**
+    - [x] Add a panel with a description and complexity table for each algorithm.
 - [ ] **Accessibility:**
     - [ ] Larger UI scale option.
-    - [ ] High-contrast mode.
-    - [ ] Keyboard-only navigation.
+    - [x] High-contrast mode.
+    - [ ] Keyboard-only navigation improvements.
     - [ ] Tooltips on all controls.
 
 ## Phase 5: Performance & Rendering
@@ -89,13 +89,14 @@ This document outlines the plan to elevate the project to a production-grade app
     - [ ] "Jump to next swap/compare" buttons.
 
 ## Phase 6: Data, Export & Replay
-- [ ] **Deterministic Seeds:** Show the random seed in the HUD and allow re-running with the same seed.
+- [x] **Deterministic Seeds:** Show the random seed in the HUD and allow re-running with the same seed.
 - [ ] **Import/Export:**
-    - [ ] JSON session export/import (config, seed, steps, etc.).
-    - [ ] Export PNG of the current frame.
-    - [ ] Export GIF of the full run.
-- [ ] **Benchmark Mode:**
-    - [ ] Run N trials per algorithm/preset and export results as CSV.
+    - [x] JSON session export (config, seed, steps, etc.).
+    - [ ] JSON session import / replay bootstrap.
+    - [x] Export PNG of the current frame.
+    - [x] Export GIF of the full run.
+- [x] **Benchmark Mode:**
+    - [x] Run N trials per algorithm/preset and export results as CSV.
 
 ## Phase 7: CI/CD & Distribution
 - [ ] **GitHub Actions:**
@@ -122,11 +123,11 @@ This document outlines the plan to elevate the project to a production-grade app
 ## Backlog (Prioritized)
 1.  [x] Registry + refactor existing Bubble/Quick/Merge to use it.
 2.  [x] Tests: unit + hypothesis; step-replay harness.
-3.  [ ] New algos: Insertion → Heap → Shell → Radix LSD.
-4.  [ ] Presets + seeded RNG; HUD shows seed.
-5.  [ ] Compare mode (two canvases; shared controls).
-6.  [ ] JSON session export/replay.
-7.  [ ] Benchmark runner (per-algo, per-preset).
-8.  [ ] Theme toggle + accessibility polish.
+3.  [x] New algos: Insertion → Heap → Shell → Radix LSD.
+4.  [x] Presets + seeded RNG; HUD shows seed.
+5.  [x] Compare mode (two canvases; shared controls).
+6.  [ ] JSON session import/replay automation.
+7.  [x] Benchmark runner (per-algo, per-preset).
+8.  [ ] Accessibility polish (theme collateral, narration cues, docs).
 9.  [ ] CI matrix + installers.
 10. [ ] Docs pass + demo videos/GIFs.

@@ -11,10 +11,23 @@ from app.core.step import Step
         in_place=True,
         comparison=True,
         complexity={"best": "O(n)", "avg": "O(n^2)", "worst": "O(n^2)"},
+        description=(
+            "Adjacent swaps bubble the largest values toward the end each pass, "
+            "with an early-exit optimisation when no swaps occur."
+        ),
+        notes=(
+            "Stable",
+            "Great for teaching because every compare/swap is visible",
+            "Best case O(n) thanks to swap detection",
+        ),
     )
 )
 def bubble_sort(a: list[int]) -> Iterator[Step]:
     n = len(a)
+    if n <= 1:
+        if n == 1:
+            yield Step("confirm", (0,))
+        return
     for i in range(n):
         swapped = False
         for j in range(0, n - i - 1):
@@ -27,3 +40,6 @@ def bubble_sort(a: list[int]) -> Iterator[Step]:
                 swapped = True
         if not swapped:
             break
+
+    for idx in range(n):
+        yield Step("confirm", (idx,))

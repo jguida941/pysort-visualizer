@@ -11,11 +11,22 @@ from app.core.step import Step
         in_place=False,
         comparison=True,
         complexity={"best": "O(n log n)", "avg": "O(n log n)", "worst": "O(n log n)"},
+        description=(
+            "Bottom-up merge sort that repeatedly merges adjacent runs until the whole "
+            "array is sorted, producing a stable trace."
+        ),
+        notes=(
+            "Stable",
+            "Deterministic iteration order makes replay simple",
+            "Allocates a small auxiliary buffer per merge window",
+        ),
     )
 )
 def merge_sort(a: list[int]) -> Iterator[Step]:
     n = len(a)
     if n <= 1:
+        if n == 1:
+            yield Step("confirm", (0,))
         return
 
     width = 1
@@ -53,3 +64,6 @@ def merge_sort(a: list[int]) -> Iterator[Step]:
                         a[k] = aux[j]
                         j += 1
         width *= 2
+
+    for idx in range(n):
+        yield Step("confirm", (idx,))

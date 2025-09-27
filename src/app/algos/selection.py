@@ -11,6 +11,15 @@ from app.core.step import Step
         in_place=True,
         comparison=True,
         complexity={"best": "O(n^2)", "avg": "O(n^2)", "worst": "O(n^2)"},
+        description=(
+            "Scans the unsorted tail for the minimum element and swaps it into the "
+            "front, shrinking the unsorted region each pass."
+        ),
+        notes=(
+            "Not stable",
+            "Makes exactly n*(n-1)/2 comparisons regardless of input",
+            "Keeps swap count minimal compared with Bubble Sort",
+        ),
     )
 )
 def selection_sort(a: list[int]) -> Iterator[Step]:
@@ -35,3 +44,6 @@ def selection_sort(a: list[int]) -> Iterator[Step]:
             yield Step("key", (i,), a[i])
 
     yield Step("key", ())
+
+    for idx in range(n):
+        yield Step("confirm", (idx,))

@@ -26,7 +26,11 @@ Every animation frame is backed by an explicit stream of Step records, ensuring 
 ## Highlights
 
 - **Instrumented algorithms**: Bubble, Insertion, Selection, Shell, Heap, Comb, Cocktail, Quick (median-of-three), Bottom‑Up Merge, Counting, Radix (LSD), Bucket, and Timsort Trace register themselves through a plugin registry. Each yields richly-typed `Step` objects so the UI, narration, and tests stay in lockstep.
+- **Explanations panel**: Every algorithm tab renders a metadata card with traits, complexity table, and teaching notes so learners can connect what they see to theory at a glance.
+- **Compare mode**: Launch a side-by-side view with linked controls to run two algorithms on the same input, with FPS/seed/preset kept in sync for apples-to-apples comparisons.
+- **Deterministic presets**: Choose from uniform, nearly-sorted, reversed, few-unique, and more—each backed by a visible RNG seed so you can recreate runs or share them with students.
 - **Deterministic replay**: Checkpoints capture array snapshots/metrics every *n* steps (`VizConfig.checkpoint_stride`). Seeking restores the nearest checkpoint, replays intervening steps, and guarantees the HUD, highlights, and narration remain coherent.
+- **Accessible themes**: Flip between the original dark palette and a high-contrast light mode; tooltips, HUD, and legends all re-tint automatically for readability.
 - **Manual & automated playback**: `Step ▶`/`Step ◀` buttons advance or rewind one step at a time (even before a full run), while the timer provides smooth animation at user-selected FPS. Scrubbing, keyboard shortcuts, and narration updates respect both modes.
 - **Color-coded semantics**: Dedicated highlight channels clarify intent:
   - Cyan = key being inserted (`Step("key", ...)`)
@@ -39,6 +43,7 @@ Every animation frame is backed by an explicit stream of Step records, ensuring 
 - **Robust crash handling**: A hardened `sys.excepthook` writes to a rotating log under the user’s log directory (via `platformdirs`) and displays a critical dialog only when a `QApplication` exists.
 - **Persistence**: User FPS, last input array, window geometry, and UI theme preferences round-trip automatically through `QSettings` (`org.pysort/sorting-visualizer`).
 - **Production toolchain**: `ruff`, `black`, `mypy --strict`, and `pytest` all pass; algorithms are validated with property-based tests, determinism checks, and replay harnesses.
+- **Export & benchmark**: One-click export to CSV/JSON/PNG/GIF plus a built-in benchmark runner that sweeps every algorithm for the active preset/seed and writes a CSV report.
 
 ---
 
@@ -118,9 +123,29 @@ The application has been verified on macOS 14, Windows 11, and Ubuntu 24.10 with
 ## Feature Tour
 
 ### Algorithm Registry
-- `src/app/algos/registry.py` exposes a frozen `AlgoInfo` dataclass (`name`, `stable`, `in_place`, `comparison`, `complexity`) and a decorator-based registration API.
+- `src/app/algos/registry.py` exposes a frozen `AlgoInfo` dataclass (`name`, `stable`, `in_place`, `comparison`, `complexity`, `description`, `notes`) and a decorator-based registration API.
 - Clients import `app.algos.<algo>`; module import side-effects populate `REGISTRY` and `INFO` dictionaries keyed by human-readable names (“Bubble Sort”, “Insertion Sort”…).
 - The app window iterates sorted `INFO` keys to build tabs dynamically. Tests do the same to guarantee coverage for every registered algorithm.
+
+### Explanations Panel
+- Each `AlgoInfo` entry now carries a human-readable description plus highlight bullets.
+- `AlgorithmVisualizerBase` renders the metadata card beside the canvas, showing traits (stable/in-place/comparison), complexity table, and notes.
+- The panel updates automatically with new algorithms, keeping documentation, narration, and UI in sync.
+
+### Compare Mode
+- The “Compare” tab embeds two visualizers in a linked split view.
+- Shared controls drive both algorithms: seed-safe generation, play/pause, single-step, and resets remain synchronised.
+- Algorithm selectors make it easy to juxtapose stable vs. unstable variants or explore different complexity classes side by side.
+
+### Data Presets & Seeds
+- `app/presets` defines reusable dataset generators (uniform, nearly-sorted, reverse runs, few unique, etc.).
+- The toolbar exposes a preset picker and seed field; generated runs log the preset + seed and surface them in the HUD.
+- Benchmarks reuse the same presets so CLI research and GUI demos stay aligned.
+
+### Export & Benchmarking
+- `Export…` writes the active trace to CSV (steps), JSON (full session), PNG (snapshot), or GIF (animated playback).
+- The `Benchmark` button sweeps every registered algorithm for the chosen preset/seed (three runs by default) and emits a CSV with step counts, comparisons, swaps, runtime, and correctness flags.
+- Outputs reuse the same deterministic presets so you can compare traces with colleagues or automate grading pipelines.
 
 ### Step Contract (`Step` dataclass)
 Supported operations currently include:

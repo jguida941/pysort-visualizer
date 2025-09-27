@@ -1,0 +1,4 @@
+# file: /Users/jguida941/Downloads/MergeSortAlgorithm-master/src/app/presets/__init__.py
+# hypothesis_version: 6.140.2
+
+['Few unique', 'Nearly sorted', 'Random (uniform)', 'Reverse run', 'Reverse sorted', 'Sorted ascending', 'few_unique', 'nearly_sorted', 'random', 'reverse_run', 'reverse_sorted', 'sorted']

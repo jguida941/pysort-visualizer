@@ -11,11 +11,22 @@ from app.core.step import Step
         in_place=False,
         comparison=False,
         complexity={"best": "O(d(n + k))", "avg": "O(d(n + k))", "worst": "O(d(n + k))"},
+        description=(
+            "Processes digits from least- to most-significant using counting-sort "
+            "passes, keeping the process stable."
+        ),
+        notes=(
+            "Stable",
+            "Supports negatives by offsetting before the digit passes",
+            "Digit base 10 keeps the trace readable",
+        ),
     )
 )
 def radix_sort_lsd(a: list[int]) -> Iterator[Step]:
     n = len(a)
     if n <= 1:
+        if n == 1:
+            yield Step("confirm", (0,))
         return
 
     original = list(a)

@@ -11,11 +11,22 @@ from app.core.step import Step
         in_place=True,
         comparison=True,
         complexity={"best": "O(n log n)", "avg": "O(n log n)", "worst": "O(n log n)"},
+        description=(
+            "Turns the array into a max-heap and repeatedly extracts the root, "
+            "writing the largest elements to the end."
+        ),
+        notes=(
+            "Not stable",
+            "Heap construction runs in linear time",
+            "Guarantees O(n log n) even on adversarial inputs",
+        ),
     )
 )
 def heap_sort(a: list[int]) -> Iterator[Step]:
     n = len(a)
     if n <= 1:
+        if n == 1:
+            yield Step("confirm", (0,))
         return
 
     def sift_down(start: int, end: int) -> Iterator[Step]:

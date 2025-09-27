@@ -11,11 +11,22 @@ from app.core.step import Step
         in_place=True,
         comparison=True,
         complexity={"best": "O(n)", "avg": "O(n^2)", "worst": "O(n^2)"},
+        description=(
+            "Bi-directional bubble sort: a forward pass bubbles large items right, "
+            "the backward pass settles small items left."
+        ),
+        notes=(
+            "Stable",
+            "Eliminates turtles at the start faster than plain bubble sort",
+            "Nice visual of the sorted zone growing from both ends",
+        ),
     )
 )
 def cocktail_shaker_sort(a: list[int]) -> Iterator[Step]:
     n = len(a)
     if n <= 1:
+        if n == 1:
+            yield Step("confirm", (0,))
         return
 
     start = 0

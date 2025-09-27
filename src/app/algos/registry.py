@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import import_module
 from typing import TypeAlias
 
@@ -18,6 +18,8 @@ class AlgoInfo:
     in_place: bool
     comparison: bool
     complexity: dict[str, str]
+    description: str = ""
+    notes: tuple[str, ...] = field(default_factory=tuple)
 
 
 REGISTRY: dict[str, Algorithm] = {}

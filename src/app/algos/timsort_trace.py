@@ -66,6 +66,15 @@ def _merge_sections(a: list[int], start: int, mid: int, end: int) -> Iterator[St
         in_place=False,
         comparison=True,
         complexity={"best": "O(n)", "avg": "O(n log n)", "worst": "O(n log n)"},
+        description=(
+            "Approximates Python's Timsort: detects natural runs, extends them with "
+            "insertion sort, then merges using a stack discipline."
+        ),
+        notes=(
+            "Stable",
+            "Runs are at least MIN_RUN=32 elements",
+            "Great for showcasing real-world hybrid sorting",
+        ),
     )
 )
 def timsort_trace(a: list[int]) -> Iterator[Step]:

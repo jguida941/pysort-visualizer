@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import os
 import sys
@@ -8,9 +9,13 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import suppress
 from dataclasses import dataclass, fields
+from html import escape
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Any, get_type_hints
 
+from PIL import Image
+from PIL.ImageQt import fromqimage
 from PyQt6.QtCore import QRect, QSettings, QSize, Qt, QTimer
 from PyQt6.QtGui import (
     QBrush,
@@ -24,8 +29,11 @@ from PyQt6.QtGui import (
     QShortcut,
 )
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
+    QComboBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -38,15 +46,88 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QSplitter,
     QStyle,
+    QTextBrowser,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from app.algos.registry import AlgoInfo
+from app.algos.registry import INFO, REGISTRY, AlgoInfo
 from app.core.step import Step
+from app.presets import DEFAULT_PRESET_KEY, generate_dataset, get_preset, get_presets
 
 AlgorithmFunc = Callable[[list[int]], Iterator[Step]]
+
+THEME_PRESETS: dict[str, dict[str, dict[str, str]]] = {
+    "dark": {
+        "cfg": {
+            "bg_color": "#0f1115",
+            "bar_color": "#6aa0ff",
+            "cmp_color": "#ffe08a",
+            "swap_color": "#fa8072",
+            "pivot_color": "#90ee90",
+            "merge_color": "#a390ee",
+            "key_color": "#3cd7d7",
+            "shift_color": "#ff9f43",
+            "confirm_color": "#62d26f",
+            "hud_color": "#e6e6e6",
+        },
+        "style": {
+            "widget_fg": "#e6e6e6",
+            "widget_bg": "#0f1115",
+            "caption_bg": "rgba(106,160,255,0.06)",
+            "caption_border": "#6aa0ff",
+            "placeholder_fg": "#b6bfca",
+            "legend_fg": "#98a6c7",
+            "legend_bg": "rgba(35,45,64,0.45)",
+            "legend_border": "rgba(152,166,199,0.25)",
+            "input_bg": "rgba(106,160,255,0.06)",
+            "input_border": "#6aa0ff",
+            "disabled_fg": "#7b8496",
+            "list_bg": "rgba(106,160,255,0.04)",
+            "list_border": "#6aa0ff",
+            "focus_border": "#2f6bff",
+            "focus_bg": "rgba(47,107,255,0.14)",
+            "slider_focus_border": "#2f6bff",
+            "card_bg": "rgba(35,45,64,0.35)",
+        },
+    },
+    "high-contrast": {
+        "cfg": {
+            "bg_color": "#ffffff",
+            "bar_color": "#0f6fff",
+            "cmp_color": "#ff6f00",
+            "swap_color": "#d32f2f",
+            "pivot_color": "#00796b",
+            "merge_color": "#5e35b1",
+            "key_color": "#1565c0",
+            "shift_color": "#c2185b",
+            "confirm_color": "#2e7d32",
+            "hud_color": "#111111",
+        },
+        "style": {
+            "widget_fg": "#111111",
+            "widget_bg": "#ffffff",
+            "caption_bg": "rgba(15,111,255,0.12)",
+            "caption_border": "#0f6fff",
+            "placeholder_fg": "#4a4a4a",
+            "legend_fg": "#1b1b1b",
+            "legend_bg": "rgba(15,111,255,0.10)",
+            "legend_border": "rgba(15,111,255,0.35)",
+            "input_bg": "rgba(15,111,255,0.08)",
+            "input_border": "#0f6fff",
+            "disabled_fg": "#5f5f5f",
+            "list_bg": "rgba(15,111,255,0.06)",
+            "list_border": "#0f6fff",
+            "focus_border": "#0b4bb3",
+            "focus_bg": "rgba(11,75,179,0.12)",
+            "slider_focus_border": "#0b4bb3",
+            "card_bg": "rgba(15,111,255,0.08)",
+        },
+    },
+}
+
+DEFAULT_THEME = "dark"
 
 
 def _install_crash_hook() -> None:
@@ -91,8 +172,20 @@ def _build_logger() -> logging.Logger:
         log_dir = Path(user_log_dir_func("sorting-visualizer", "org.pysort"))
     else:
         log_dir = Path.cwd() / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    fh = RotatingFileHandler(log_dir / "sorting_viz.log", maxBytes=1_000_000, backupCount=5)
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        log_dir = Path.cwd() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "sorting_viz.log"
+    try:
+        fh = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=5)
+    except OSError:
+        fallback_dir = Path.cwd() / "logs"
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        fh = RotatingFileHandler(
+            fallback_dir / "sorting_viz.log", maxBytes=1_000_000, backupCount=5
+        )
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
     fh.setFormatter(fmt)
     sh = logging.StreamHandler()
@@ -304,8 +397,19 @@ class VisualizationCanvas(QWidget):
         painter.setPen(QColor(self._cfg.hud_color))
         painter.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
 
+        preset_key = metrics.get("preset") or "custom"
+        if isinstance(preset_key, str) and preset_key != "custom":
+            try:
+                preset_display = get_preset(preset_key).label
+            except KeyError:
+                preset_display = preset_key
+        else:
+            preset_display = "Custom"
+        seed_value = metrics.get("seed")
+        seed_display = "-" if seed_value in (None, "") else str(seed_value)
         hud_lines = [
             f"Algo: {metrics.get('algo','')}",
+            f"Preset: {preset_display} | Seed={seed_display}",
             f"n={len(arr) if arr else 0} | FPS={metrics.get('fps', 0)}",
             f"Compare={metrics.get('comparisons', 0)} | Swaps={metrics.get('swaps', 0)}",
             f"Steps={metrics.get('step_idx', 0)}/{metrics.get('total_steps','?')} | Time={metrics.get('elapsed_s', 0.0):.2f}s",
@@ -358,6 +462,8 @@ class AlgorithmVisualizerBase(QWidget):
         algo_func: AlgorithmFunc,
         cfg: VizConfig | None = None,
         parent: QWidget | None = None,
+        *,
+        show_controls: bool = True,
     ) -> None:
         super().__init__(parent)
         self._settings = QSettings()
@@ -365,6 +471,15 @@ class AlgorithmVisualizerBase(QWidget):
         self.algo_info = algo_info
         self.algo_func: AlgorithmFunc = algo_func
         self.title = algo_info.name
+        self._show_controls = show_controls
+        stored_theme = self._settings.value("ui/theme", DEFAULT_THEME)
+        if isinstance(stored_theme, bytes):
+            stored_theme = stored_theme.decode()
+        self._theme = stored_theme if stored_theme in THEME_PRESETS else DEFAULT_THEME
+        self._theme_style = THEME_PRESETS[self._theme]["style"].copy()
+        self.right_panel: QWidget | None = None
+        self.legend_label: QLabel | None = None
+        self.metadata_view: QTextBrowser | None = None
 
         # Ensure this widget really paints a dark background (not the parent’s light gray)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -400,6 +515,8 @@ class AlgorithmVisualizerBase(QWidget):
         self._t0 = 0.0
         self._narration_default = ""
         self._shortcuts: list[QShortcut] = []
+        self._current_preset = DEFAULT_PRESET_KEY
+        self._current_seed: int | None = None
 
         # UI
         self._timer = QTimer(self)
@@ -422,28 +539,44 @@ class AlgorithmVisualizerBase(QWidget):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
 
-        row = QHBoxLayout()
-        lbl_input = QLabel("Input (comma ints) or leave blank to randomize:")
+        self.row_container = QWidget()
+        row = QHBoxLayout(self.row_container)
+        lbl_input = QLabel("Input (comma ints) or choose a preset:")
         lbl_input.setObjectName("caption")
         row.addWidget(lbl_input)
         self.le_input = QLineEdit()
         self.le_input.setPlaceholderText("e.g. 5,2,9,1,5,6")
-        self.btn_random = QPushButton("Randomize")
+        self.cmb_preset = QComboBox()
+        for preset in get_presets():
+            self.cmb_preset.addItem(preset.label, preset.key)
+            idx = self.cmb_preset.count() - 1
+            self.cmb_preset.setItemData(idx, preset.description, Qt.ItemDataRole.ToolTipRole)
+        self.cmb_preset.setFixedWidth(180)
+        self.cmb_preset.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        self.le_seed = QLineEdit()
+        self.le_seed.setPlaceholderText("seed (auto)")
+        self.le_seed.setFixedWidth(120)
+        self.btn_random = QPushButton("Generate")
         self.btn_start = QPushButton("Start")
         self.btn_pause = QPushButton("Pause/Resume")
         self.btn_reset = QPushButton("Reset")
-        self.btn_export = QPushButton("Export CSV")
+        self.btn_export = QPushButton("Export…")
+        self.btn_benchmark = QPushButton("Benchmark")
 
         row.addWidget(self.le_input)
+        row.addWidget(self.cmb_preset)
+        row.addWidget(self.le_seed)
         row.addWidget(self.btn_random)
         row.addWidget(self.btn_start)
         row.addWidget(self.btn_pause)
         row.addWidget(self.btn_reset)
         row.addWidget(self.btn_export)
+        row.addWidget(self.btn_benchmark)
         row.setSpacing(8)
         row.setContentsMargins(8, 6, 8, 0)
 
-        speed_row = QHBoxLayout()
+        self.speed_container = QWidget()
+        speed_row = QHBoxLayout(self.speed_container)
         fps_label = QLabel("FPS:")
         fps_label.setObjectName("caption")
         speed_row.addWidget(fps_label)
@@ -460,7 +593,8 @@ class AlgorithmVisualizerBase(QWidget):
         speed_row.setSpacing(8)
         speed_row.setContentsMargins(8, 0, 8, 0)
 
-        scrub_row = QHBoxLayout()
+        self.scrub_container = QWidget()
+        scrub_row = QHBoxLayout(self.scrub_container)
         self.lbl_scrub = QLabel("Step: 0/0")
         self.lbl_scrub.setObjectName("caption")
         self.sld_scrub = QSlider(Qt.Orientation.Horizontal)
@@ -476,6 +610,7 @@ class AlgorithmVisualizerBase(QWidget):
             self.btn_pause,
             self.btn_reset,
             self.btn_export,
+            self.btn_benchmark,
             self.btn_step_back,
             self.btn_step_fwd,
         ):
@@ -488,6 +623,7 @@ class AlgorithmVisualizerBase(QWidget):
             self.btn_pause.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaPause))
             self.btn_reset.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogResetButton))
             self.btn_export.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
+            self.btn_benchmark.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
             self.btn_step_back.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
             self.btn_step_fwd.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
         scrub_row.addWidget(self.lbl_scrub)
@@ -512,12 +648,28 @@ class AlgorithmVisualizerBase(QWidget):
 
         right = QVBoxLayout()
         right_w = QWidget()
+        self.right_panel = right_w
         right_w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         right_w.setAutoFillBackground(True)
         rp = right_w.palette()
         rp.setColor(right_w.backgroundRole(), QColor(self.cfg.bg_color))
         right_w.setPalette(rp)
         right_w.setLayout(right)
+
+        details_group = QGroupBox("Algorithm Details")
+        details_group.setFlat(True)
+        details_layout = QVBoxLayout()
+        details_layout.setContentsMargins(8, 8, 8, 8)
+        details_group.setLayout(details_layout)
+        self.metadata_view = QTextBrowser()
+        self.metadata_view.setOpenExternalLinks(True)
+        self.metadata_view.setReadOnly(True)
+        self.metadata_view.setMinimumHeight(180)
+        self.metadata_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.metadata_view.setStyleSheet("background: rgba(35,45,64,0.35);")
+        details_layout.addWidget(self.metadata_view)
+        right.addWidget(details_group)
+
         right.addWidget(QLabel("Steps"))
         self.lst_steps = QListWidget()
         right.addWidget(self.lst_steps, 1)
@@ -551,6 +703,8 @@ class AlgorithmVisualizerBase(QWidget):
 
         focusables = [
             self.le_input,
+            self.cmb_preset,
+            self.le_seed,
             self.spn_fps,
             self.sld_fps,
             self.sld_scrub,
@@ -559,6 +713,7 @@ class AlgorithmVisualizerBase(QWidget):
             self.btn_pause,
             self.btn_reset,
             self.btn_export,
+            self.btn_benchmark,
             self.btn_step_back,
             self.btn_step_fwd,
             self.chk_labels,
@@ -571,11 +726,12 @@ class AlgorithmVisualizerBase(QWidget):
             if is_macos:
                 w.setAttribute(Qt.WidgetAttribute.WA_MacShowFocusRect, False)
 
-        root.addLayout(row)
-        root.addLayout(speed_row)
-        root.addLayout(scrub_row)
+        root.addWidget(self.row_container)
+        root.addWidget(self.speed_container)
+        root.addWidget(self.scrub_container)
         root.addWidget(self.lbl_narration)
         root.addWidget(splitter)
+        self._render_metadata()
 
         # (optional) nice keyboard order; defer until widgets belong to this window
         QWidget.setTabOrder(self.le_input, self.btn_random)
@@ -591,103 +747,177 @@ class AlgorithmVisualizerBase(QWidget):
 
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
+        self.row_container.setVisible(self._show_controls)
+        self.speed_container.setVisible(self._show_controls)
+        self.scrub_container.setVisible(self._show_controls)
+        self.apply_theme(self._theme)
+
+    def _render_metadata(self) -> None:
+        if self.metadata_view is None:
+            return
+
+        info = self.algo_info
+        traits = [
+            "Stable" if info.stable else "Unstable",
+            "In-place" if info.in_place else "Out-of-place",
+            "Comparison sort" if info.comparison else "Non-comparison",
+        ]
+        trait_html = " · ".join(escape(t) for t in traits)
+
+        desc_html = (
+            f"<p style='margin:4px 0 8px 0;'>{escape(info.description)}</p>"
+            if info.description
+            else ""
+        )
+
+        notes_html = ""
+        if info.notes:
+            notes_items = "".join(f"<li>{escape(note)}</li>" for note in info.notes)
+            notes_html = (
+                "<p style='margin:0 0 4px 0;'><strong>Highlights</strong></p>"
+                f"<ul style='margin:0 0 8px 16px;'>{notes_items}</ul>"
+            )
+
+        complexity_rows = []
+        for label, key in (("Best", "best"), ("Average", "avg"), ("Worst", "worst")):
+            value = info.complexity.get(key)
+            if value:
+                complexity_rows.append(
+                    f"<tr><th style='text-align:left;padding-right:8px;'>{label}</th>"
+                    f"<td>{escape(value)}</td></tr>"
+                )
+        complexity_html = ""
+        if complexity_rows:
+            complexity_html = (
+                "<table style='border-collapse:collapse;font-size:12px;margin-top:4px;'>"
+                + "".join(complexity_rows)
+                + "</table>"
+            )
+
+        accent = self._theme_style.get("legend_fg", "#9cadcb")
+        html = f"""
+<div style="font-size:13px; line-height:1.45;">
+  <p style="font-weight:600; margin:0 0 4px 0;">{escape(info.name)}</p>
+  <p style="margin:0 0 8px 0; color:{accent};">{trait_html}</p>
+  {desc_html}
+  {notes_html}
+  {complexity_html}
+</div>
+"""
+        self.metadata_view.setHtml(html)
+
+    def apply_theme(self, theme: str) -> None:
+        if theme not in THEME_PRESETS:
+            theme = DEFAULT_THEME
+        self._theme = theme
+        preset = THEME_PRESETS[theme]
+        for key, value in preset["cfg"].items():
+            setattr(self.cfg, key, value)
+        self._theme_style = preset["style"].copy()
+        if self.right_panel is not None:
+            palette = self.right_panel.palette()
+            palette.setColor(self.right_panel.backgroundRole(), QColor(self.cfg.bg_color))
+            self.right_panel.setPalette(palette)
+        if self.metadata_view is not None:
+            self.metadata_view.setStyleSheet(
+                f"background:{self._theme_style['card_bg']}; color:{self._theme_style['widget_fg']};"
+            )
+        self._update_legend_text()
+        self._apply_stylesheet()
+        self.canvas.update()
+        self._render_metadata()
+
+    def _update_legend_text(self) -> None:
+        if self.legend_label is None:
+            return
+        self.legend_label.setText(
+            "<b>Legend</b><br/>"
+            f"<span style='color:{self.cfg.key_color};'>■</span> Key  "
+            f"<span style='color:{self.cfg.shift_color};'>■</span> Shift  "
+            f"<span style='color:{self.cfg.cmp_color};'>■</span> Compare  "
+            f"<span style='color:{self.cfg.swap_color};'>■</span> Swap  "
+            f"<span style='color:{self.cfg.pivot_color};'>■</span> Pivot"
+        )
+
+    def _apply_stylesheet(self) -> None:
+        style = self._theme_style
         self.setStyleSheet(
             f"""
-/* Global */
-QWidget {{ color:#e6e6e6; background:#0f1115; }}
+QWidget {{ color:{style['widget_fg']}; background:{style['widget_bg']}; }}
 
-/* Accent helpers */
- @accent: #6aa0ff; /* (Qt ignores variables, left as a reminder) */
-
-/* Caption pills – same accent as buttons */
 QLabel#caption {{
-  color:#e6e6e6;
-  background:rgba(106,160,255,0.06);
-  border:1px solid {self.cfg.bar_color};
+  color:{style['widget_fg']};
+  background:{style['caption_bg']};
+  border:1px solid {style['caption_border']};
   border-radius:8px;
   padding:4px 10px;
   font-weight:600;
 }}
 
 QLabel#legend {{
-  color:#98a6c7;
+  color:{style['legend_fg']};
   padding:6px 8px;
-  background:rgba(35,45,64,0.45);
-  border:1px solid rgba(152,166,199,0.25);
+  background:{style['legend_bg']};
+  border:1px solid {style['legend_border']};
   border-radius:6px;
   font-size:11px;
 }}
 
-/* Inputs (LineEdit + SpinBox) – same hollow glass */
 QLineEdit, QAbstractSpinBox {{
-  color:#e6e6e6;
-  background:rgba(106,160,255,0.06);
-  border:1px solid {self.cfg.bar_color};
+  color:{style['widget_fg']};
+  background:{style['input_bg']};
+  border:1px solid {style['input_border']};
   border-radius:6px;
   padding:6px 8px;
 }}
-QLineEdit::placeholder {{ color:#b6bfca; }}
-QLineEdit:focus, QAbstractSpinBox:focus {{ border-color:#9bc0ff; }}
+QLineEdit::placeholder {{ color:{style['placeholder_fg']}; }}
+QLineEdit:focus, QAbstractSpinBox:focus {{
+  border-color:{style['focus_border']};
+  background:{style['focus_bg']};
+}}
 
-/* Buttons – hollow glass */
 QPushButton {{
-  color:#e6e6e6;
+  color:{style['widget_fg']};
   background:transparent;
   border:1px solid {self.cfg.bar_color};
   border-radius:6px;
   padding:6px 10px;
 }}
-QPushButton:hover   {{ background:rgba(106,160,255,0.20); }}
-QPushButton:pressed {{ background:rgba(106,160,255,0.40); }}
+QPushButton:hover   {{ background:{style['input_bg']}; }}
+QPushButton:pressed {{ background:{style['focus_bg']}; }}
 QPushButton:disabled{{
-  color:#7b8496; border-color:#3e4a60; background:transparent;
+  color:{style['disabled_fg']}; border-color:{style['disabled_fg']}; background:transparent;
 }}
 
-/* Lists / Log – same accent frame */
 QListWidget, QTextEdit {{
-  color:#e6e6e6;
-  background:rgba(106,160,255,0.04);
-  border:1px solid {self.cfg.bar_color};
+  color:{style['widget_fg']};
+  background:{style['list_bg']};
+  border:1px solid {style['list_border']};
   border-radius:6px;
 }}
-QListWidget::item:selected {{ background:#243042; }}
+QListWidget::item:selected {{ background:{style['focus_bg']}; }}
 
-/* Sliders – groove outlined in accent so FPS/Step “match” */
 QSlider::groove:horizontal {{
   height:8px;
-  background:rgba(106,160,255,0.06);
-  border:1px solid {self.cfg.bar_color};
+  background:{style['list_bg']};
+  border:1px solid {style['list_border']};
   border-radius:4px;
 }}
 QSlider::handle:horizontal {{
   width:18px;
-  background:#e6e6e6;
-  border:1px solid {self.cfg.bar_color};
+  background:{style['widget_fg']};
+  border:1px solid {style['list_border']};
   border-radius:9px;
   margin:-6px 0;
 }}
-
-/* Cobalt accent */
-QLineEdit:focus,
-QAbstractSpinBox:focus,
-QPushButton:focus,
-QListWidget:focus,
-QTextEdit:focus {{
-  border: 1px solid #2f6bff;              /* bright cobalt */
-  background: rgba(47,107,255,0.14);       /* subtle glow */
-}}
-
-/* Sliders: groove + handle focus */
 QSlider::groove:horizontal:focus {{
-  border: 1px solid #2f6bff;
-  background: rgba(47,107,255,0.12);
+  border:1px solid {style['slider_focus_border']};
+  background:{style['focus_bg']};
 }}
 QSlider::handle:horizontal:focus {{
-  border: 2px solid #2f6bff;               /* a bit bolder on the knob */
-  margin: -7px 0;                          /* compensates so the handle doesn't shift */
+  border:2px solid {style['slider_focus_border']};
+  margin:-7px 0;
 }}
-
-/* Make sure no native subpage color fights the look */
 QSlider::sub-page:horizontal,
 QSlider::add-page:horizontal {{ background: transparent; border: none; }}
 
@@ -703,6 +933,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self.sld_fps.valueChanged.connect(self._on_fps_changed)
         self.spn_fps.valueChanged.connect(self._on_fps_changed)
         self.btn_export.clicked.connect(self._on_export)
+        self.btn_benchmark.clicked.connect(self._on_benchmark)
         self.le_input.editingFinished.connect(
             lambda: self._settings.setValue("viz/last_input", self.le_input.text())
         )
@@ -738,6 +969,29 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
             last_input = last_input.decode()
         self.le_input.setText(str(last_input))
 
+        preset_key = self._settings.value("viz/preset", DEFAULT_PRESET_KEY)
+        if isinstance(preset_key, bytes):
+            preset_key = preset_key.decode()
+        idx = self.cmb_preset.findData(preset_key)
+        if idx >= 0:
+            self.cmb_preset.setCurrentIndex(idx)
+            self._current_preset = str(preset_key)
+        else:
+            fallback_idx = self.cmb_preset.findData(DEFAULT_PRESET_KEY)
+            if fallback_idx >= 0:
+                self.cmb_preset.setCurrentIndex(fallback_idx)
+            self._current_preset = DEFAULT_PRESET_KEY
+
+        seed_value = self._settings.value("viz/seed", "")
+        if seed_value not in (None, ""):
+            self.le_seed.setText(str(seed_value))
+            try:
+                self._current_seed = int(seed_value)
+            except (TypeError, ValueError):
+                self._current_seed = None
+        else:
+            self._current_seed = None
+
     def _persist_last_array(self, arr: list[int]) -> None:
         rendered = ",".join(str(v) for v in arr)
         self._settings.setValue("viz/last_input", rendered)
@@ -760,6 +1014,8 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         can_start_new = not running
 
         self.le_input.setEnabled(can_start_new)
+        self.cmb_preset.setEnabled(can_start_new)
+        self.le_seed.setEnabled(can_start_new)
         self.btn_random.setEnabled(can_start_new)
         self.btn_start.setEnabled(can_start_new)
 
@@ -769,6 +1025,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
 
         has_steps = bool(self._steps)
         self.btn_export.setEnabled(can_start_new and has_steps)
+        self.btn_benchmark.setEnabled(can_start_new)
 
         allow_scrub = can_start_new and has_steps
         manual_forward_available = can_start_new and (has_steps or self._step_source is not None)
@@ -792,6 +1049,8 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
                 "step_idx": self._step_idx,
                 "total_steps": len(self._steps) if self._steps else 0,
                 "elapsed_s": elapsed,
+                "preset": self._current_preset,
+                "seed": self._current_seed,
             },
         }
 
@@ -802,6 +1061,8 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self._initial_array = list(arr)
         if persist:
             self._persist_last_array(arr)
+            self._current_preset = "custom"
+            self._current_seed = None
         self._highlights = {
             "compare": (),
             "swap": (),
@@ -833,11 +1094,28 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
             import random
 
             n = self.cfg.default_n
-            arr = [random.randint(self.cfg.min_val, self.cfg.max_val) for _ in range(n)]
+            preset_key = self.cmb_preset.currentData(Qt.ItemDataRole.UserRole)
+            if not isinstance(preset_key, str):
+                preset_key = DEFAULT_PRESET_KEY
+
+            seed = self._resolve_seed()
+            rng = random.Random(seed)
+            arr = generate_dataset(
+                preset_key,
+                n,
+                self.cfg.min_val,
+                self.cfg.max_val,
+                rng,
+            )
+            self._current_preset = preset_key
+            self._current_seed = seed
+            self.le_input.clear()
             self._set_array(arr, persist=False)
             self._settings.setValue("viz/last_input", "")
-            self.txt_log.append(f"Randomized array n={n}")
-            LOGGER.info("Randomized n=%d", n)
+            self._settings.setValue("viz/preset", preset_key)
+            self._settings.setValue("viz/seed", seed)
+            self.txt_log.append(f"Generated preset={preset_key} seed={seed} n={n}")
+            LOGGER.info("Generated preset=%s seed=%d n=%d", preset_key, seed, n)
         except Exception as e:
             self._error(str(e))
 
@@ -929,22 +1207,286 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
             self._warn("No steps to export yet.")
             return
         options = QFileDialog.Option.DontUseNativeDialog
-        path, _selected_filter = QFileDialog.getSaveFileName(
-            self, "Export Steps CSV", "steps.csv", "CSV (*.csv)", options=options
+        filters = "CSV (*.csv);;JSON (*.json);;PNG (*.png);;GIF (*.gif)"
+        path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Export",
+            "steps",
+            filters,
+            options=options,
         )
         if not path:
             return
         try:
-            with open(path, "w", newline="") as f:
-                w = csv.writer(f)
-                w.writerow(["idx", "op", "i", "j", "payload"])
-                for idx, st in enumerate(self._steps):
-                    i = st.indices[0] if st.indices else ""
-                    j = st.indices[1] if len(st.indices) > 1 else ""
-                    w.writerow([idx, st.op, i, j, st.payload if st.payload is not None else ""])
-            self.txt_log.append(f"Exported {len(self._steps)} steps to {path}")
+            suffix = Path(path).suffix.lower()
+            filter_default = {
+                "CSV (*.csv)": ".csv",
+                "JSON (*.json)": ".json",
+                "PNG (*.png)": ".png",
+                "GIF (*.gif)": ".gif",
+            }
+            if not suffix:
+                suffix = filter_default.get(selected_filter, ".csv")
+                path = f"{path}{suffix}"
+
+            if suffix == ".csv":
+                self._export_csv(path)
+                summary = f"CSV ({len(self._steps)} rows)"
+            elif suffix == ".json":
+                self._export_json(path)
+                summary = "JSON trace"
+            elif suffix == ".png":
+                self._export_png(path)
+                summary = "PNG snapshot"
+            elif suffix == ".gif":
+                self._export_gif(path)
+                summary = "GIF animation"
+            else:
+                raise ValueError(f"Unsupported export format: {suffix}")
+
+            self.txt_log.append(f"Exported {summary} to {path}")
         except Exception as e:
             self._error(str(e))
+
+    def _on_benchmark(self) -> None:
+        try:
+            rows = self._collect_benchmark_rows()
+            if not rows:
+                self._warn("Nothing to benchmark yet.")
+                return
+
+            options = QFileDialog.Option.DontUseNativeDialog
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save Benchmark Results",
+                "benchmark.csv",
+                "CSV (*.csv)",
+                options=options,
+            )
+            if not path:
+                return
+            if Path(path).suffix.lower() != ".csv":
+                path = f"{path}.csv"
+
+            with open(path, "w", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(
+                    [
+                        "algo",
+                        "run",
+                        "preset",
+                        "seed",
+                        "n",
+                        "steps",
+                        "comparisons",
+                        "swaps",
+                        "duration_ms",
+                        "sorted",
+                        "error",
+                    ]
+                )
+                writer.writerows(rows)
+
+            self.txt_log.append(f"Benchmark wrote {len(rows)} rows to {path}")
+        except Exception as exc:
+            self._error(str(exc))
+
+    def _export_csv(self, path: str) -> None:
+        with open(path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["idx", "op", "indices", "payload"])
+            for idx, step in enumerate(self._steps):
+                writer.writerow(
+                    [
+                        idx,
+                        step.op,
+                        ".".join(str(i) for i in step.indices),
+                        "" if step.payload is None else step.payload,
+                    ]
+                )
+
+    def _export_json(self, path: str) -> None:
+        preset_key = self._current_preset
+        preset_label = "Custom"
+        if isinstance(preset_key, str) and preset_key != "custom":
+            try:
+                preset_label = get_preset(preset_key).label
+            except KeyError:
+                preset_label = preset_key
+        payload = {
+            "algo": self.title,
+            "preset": preset_key,
+            "preset_label": preset_label,
+            "seed": self._current_seed,
+            "config": {
+                "n": len(self._array),
+                "min": self.cfg.min_val,
+                "max": self.cfg.max_val,
+                "fps": self.sld_fps.value(),
+            },
+            "initial": self._initial_array,
+            "steps": [self._step_to_mapping(i, step) for i, step in enumerate(self._steps)],
+        }
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2)
+
+    def _export_png(self, path: str) -> None:
+        pixmap = self.canvas.grab()
+        pixmap.save(path, "PNG")
+
+    def _export_gif(self, path: str) -> None:
+        if not self._steps:
+            raise ValueError("Run the algorithm before exporting a GIF.")
+
+        prev_idx = self._step_idx
+        indices: list[int] = []
+        stride = max(1, len(self._steps) // 120)
+        indices.extend(range(0, len(self._steps) + 1, stride))
+        if indices[-1] != len(self._steps):
+            indices.append(len(self._steps))
+
+        frames: list[Image.Image] = []
+        try:
+            for idx in indices:
+                self._seek(idx)
+                QApplication.processEvents()
+                qimage = self.canvas.grab().toImage()
+                frames.append(fromqimage(qimage).convert("RGBA"))
+        finally:
+            self._seek(prev_idx)
+            QApplication.processEvents()
+
+        if not frames:
+            raise ValueError("No frames captured for GIF export.")
+
+        duration_ms = max(20, int(1000 / max(1, self.sld_fps.value())))
+        first, *rest = frames
+        first.save(
+            path,
+            format="GIF",
+            save_all=True,
+            append_images=rest if rest else [first.copy()],
+            duration=duration_ms,
+            loop=0,
+            disposal=2,
+        )
+
+    @staticmethod
+    def _step_to_mapping(idx: int, step: Step) -> dict[str, Any]:
+        payload: Any = step.payload
+        if isinstance(payload, tuple):
+            payload = list(payload)
+        return {
+            "idx": idx,
+            "op": step.op,
+            "indices": list(step.indices),
+            "payload": payload,
+        }
+
+    def _resolve_seed(self) -> int:
+        import random
+
+        seed_text = self.le_seed.text().strip()
+        if seed_text:
+            try:
+                seed = int(seed_text)
+            except ValueError as exc:
+                raise ValueError("Seed must be an integer") from exc
+        else:
+            seed = random.SystemRandom().randint(0, 2**32 - 1)
+            self.le_seed.setText(str(seed))
+        self._current_seed = seed
+        return seed
+
+    def _collect_benchmark_rows(self) -> list[list[Any]]:
+        import random
+
+        rows: list[list[Any]] = []
+        manual_input = self.le_input.text().strip()
+        if manual_input:
+            dataset = self._parse_input()
+            rows.extend(self._benchmark_dataset(dataset, "custom", None, 0))
+            return rows
+
+        preset_key = self.cmb_preset.currentData(Qt.ItemDataRole.UserRole)
+        if not isinstance(preset_key, str):
+            preset_key = DEFAULT_PRESET_KEY
+
+        base_seed = self._resolve_seed()
+        self._settings.setValue("viz/seed", base_seed)
+        self._settings.setValue("viz/preset", preset_key)
+
+        runs = 3
+        for run_idx in range(runs):
+            run_seed = base_seed + run_idx
+            rng = random.Random(run_seed)
+            dataset = generate_dataset(
+                preset_key,
+                self.cfg.default_n,
+                self.cfg.min_val,
+                self.cfg.max_val,
+                rng,
+            )
+            rows.extend(self._benchmark_dataset(dataset, preset_key, run_seed, run_idx))
+
+        return rows
+
+    def _benchmark_dataset(
+        self,
+        dataset: list[int],
+        preset_key: str,
+        seed: int | None,
+        run_idx: int,
+    ) -> list[list[Any]]:
+        expected = sorted(dataset)
+        rows: list[list[Any]] = []
+        for name in sorted(INFO.keys()):
+            algo = REGISTRY[name]
+            metrics = self._measure_algorithm(algo, list(dataset), expected)
+            rows.append(
+                [
+                    name,
+                    run_idx,
+                    preset_key,
+                    "" if seed is None else seed,
+                    len(dataset),
+                    metrics.get("steps", 0),
+                    metrics.get("comparisons", 0),
+                    metrics.get("swaps", 0),
+                    f"{metrics.get('duration_s', 0.0) * 1000:.3f}",
+                    int(metrics.get("sorted", False)),
+                    metrics.get("error", ""),
+                ]
+            )
+        return rows
+
+    @staticmethod
+    def _measure_algorithm(
+        algo: AlgorithmFunc, dataset: list[int], expected: list[int]
+    ) -> dict[str, Any]:
+        comparisons = 0
+        swaps = 0
+        steps = 0
+        start = time.perf_counter()
+        error: str | None = None
+        try:
+            for step in algo(dataset):
+                steps += 1
+                if step.op in {"compare", "merge_compare"}:
+                    comparisons += 1
+                elif step.op == "swap":
+                    swaps += 1
+        except Exception as exc:  # pragma: no cover - surfaced in benchmark CSV
+            error = str(exc)
+        duration = time.perf_counter() - start
+        return {
+            "steps": steps,
+            "comparisons": comparisons,
+            "swaps": swaps,
+            "duration_s": duration,
+            "sorted": dataset == expected,
+            "error": error or "",
+        }
 
     # ---------- animation tick
 

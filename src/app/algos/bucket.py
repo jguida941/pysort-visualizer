@@ -11,11 +11,22 @@ from app.core.step import Step
         in_place=False,
         comparison=False,
         complexity={"best": "O(n)", "avg": "O(n + k)", "worst": "O(n^2)"},
+        description=(
+            "Normalises values into a fixed number of buckets, sorts each bucket, "
+            "then concatenates the results."
+        ),
+        notes=(
+            "Stable when bucket sort uses a stable inner sort",
+            "Ideal when data is uniformly distributed",
+            "Falls back to the all-equal fast path without extra work",
+        ),
     )
 )
 def bucket_sort(a: list[int]) -> Iterator[Step]:
     n = len(a)
     if n <= 1:
+        if n == 1:
+            yield Step("confirm", (0,))
         return
 
     arr = list(a)

@@ -11,11 +11,22 @@ from app.core.step import Step
         in_place=True,
         comparison=True,
         complexity={"best": "O(n log n)", "avg": "O(n^2)", "worst": "O(n^2)"},
+        description=(
+            "Starts with a long gap between compared elements and shrinks it by a "
+            "factor each pass, smoothing out turtles before finishing with gap=1."
+        ),
+        notes=(
+            "Not stable",
+            "Uses a shrink factor of 1.3, the empirically good choice",
+            "Converges toward bubble sort as the gap approaches 1",
+        ),
     )
 )
 def comb_sort(a: list[int]) -> Iterator[Step]:
     n = len(a)
     if n <= 1:
+        if n == 1:
+            yield Step("confirm", (0,))
         return
 
     gap = n
