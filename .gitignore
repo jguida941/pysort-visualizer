@@ -16,7 +16,15 @@ venv/
 logs/
 *.log
 
+# Test artifacts
+.pytest_cache/
+.hypothesis/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
 # OS files
 .DS_Store
 Thumbs.db
-

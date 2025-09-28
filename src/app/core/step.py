@@ -1,24 +1,34 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import asdict, dataclass
+from typing import Any, Literal
+
+Op = Literal[
+    "key",
+    "compare",
+    "swap",
+    "shift",
+    "set",
+    "pivot",
+    "merge_mark",
+    "merge_compare",
+    "confirm",
+]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Step:
-    """
-    op:
-      - "compare"       indices=(i, j)
-      - "swap"          indices=(i, j), payload=(value_i, value_j)
-      - "pivot"         indices=(p,)
-      - "merge_mark"    indices=(lo, hi)
-      - "merge_compare" indices=(i, j), payload=k (destination index)
-      - "set"           indices=(k,), payload=value
-      - "shift"         indices=(k,), payload=value (visual distinction from set)
-      - "key"           indices=(k,) or () - highlights key element during insertion
-      - "confirm"       indices=(i,) - final green sweep (used by finish sweep)
-    """
+    """Immutable step emitted by algorithms and consumed by the UI."""
 
-    op: str
+    op: Op
     indices: tuple[int, ...]
-    payload: Any | None = None
+    payload: Any = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["indices"] = list(self.indices)
+        return data
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> Step:
+        return Step(op=data["op"], indices=tuple(data["indices"]), payload=data.get("payload"))

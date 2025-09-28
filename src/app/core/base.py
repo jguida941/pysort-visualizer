@@ -45,7 +45,6 @@ from PyQt6.QtWidgets import (
     QSlider,
     QSpinBox,
     QSplitter,
-    QStyle,
     QTextBrowser,
     QTextEdit,
     QVBoxLayout,
@@ -55,6 +54,12 @@ from PyQt6.QtWidgets import (
 from app.algos.registry import INFO, REGISTRY, AlgoInfo
 from app.core.step import Step
 from app.presets import DEFAULT_PRESET_KEY, generate_dataset, get_preset, get_presets
+from app.ui_shared.pane import Pane
+
+try:
+    from app.ui_shared.professional_theme import generate_stylesheet
+except ImportError:
+    generate_stylesheet = None
 
 AlgorithmFunc = Callable[[list[int]], Iterator[Step]]
 
@@ -128,6 +133,7 @@ THEME_PRESETS: dict[str, dict[str, dict[str, str]]] = {
 }
 
 DEFAULT_THEME = "dark"
+PRECOMPUTE_STEP_CAP = 10_000
 
 
 def _install_crash_hook() -> None:
@@ -290,6 +296,7 @@ class VisualizationCanvas(QWidget):
         highlights: dict[str, tuple[int, ...]] = state["highlights"]
         confirms: tuple[int, ...] = state.get("confirm", tuple())
         metrics: dict[str, Any] = state["metrics"]
+        hud_visible: bool = state.get("hud_visible", True)
 
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(self._cfg.bg_color))
@@ -392,50 +399,57 @@ class VisualizationCanvas(QWidget):
 
                     x += bar_w + gap
 
-        # --- Upgraded HUD (rounded, translucent panel) ---
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        painter.setPen(QColor(self._cfg.hud_color))
-        painter.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        if hud_visible:
+            # --- Upgraded HUD (rounded, translucent panel) ---
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setPen(QColor(self._cfg.hud_color))
+            painter.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
 
-        preset_key = metrics.get("preset") or "custom"
-        if isinstance(preset_key, str) and preset_key != "custom":
-            try:
-                preset_display = get_preset(preset_key).label
-            except KeyError:
-                preset_display = preset_key
-        else:
-            preset_display = "Custom"
-        seed_value = metrics.get("seed")
-        seed_display = "-" if seed_value in (None, "") else str(seed_value)
-        hud_lines = [
-            f"Algo: {metrics.get('algo','')}",
-            f"Preset: {preset_display} | Seed={seed_display}",
-            f"n={len(arr) if arr else 0} | FPS={metrics.get('fps', 0)}",
-            f"Compare={metrics.get('comparisons', 0)} | Swaps={metrics.get('swaps', 0)}",
-            f"Steps={metrics.get('step_idx', 0)}/{metrics.get('total_steps','?')} | Time={metrics.get('elapsed_s', 0.0):.2f}s",
-        ]
+            preset_key = metrics.get("preset") or "custom"
+            if isinstance(preset_key, str) and preset_key != "custom":
+                try:
+                    preset_display = get_preset(preset_key).label
+                except KeyError:
+                    preset_display = preset_key
+            else:
+                preset_display = "Custom"
+            seed_value = metrics.get("seed")
+            seed_display = "-" if seed_value in (None, "") else str(seed_value)
+            logical_elapsed = metrics.get("elapsed_s", 0.0)
+            wall_elapsed = metrics.get("wall_elapsed_s", logical_elapsed)
+            hud_lines = [
+                f"Algo: {metrics.get('algo','')}",
+                f"Preset: {preset_display} | Seed={seed_display}",
+                f"n={len(arr) if arr else 0} | FPS={metrics.get('fps', 0)}",
+                f"Compare={metrics.get('comparisons', 0)} | Swaps={metrics.get('swaps', 0)}",
+                (
+                    f"Steps={metrics.get('step_idx', 0)}/{metrics.get('total_steps','?')} "
+                    f"| Time={logical_elapsed:.2f}s"
+                    + (f" (wall {wall_elapsed:.2f}s)" if wall_elapsed else "")
+                ),
+            ]
 
-        fm = painter.fontMetrics()
-        line_h = fm.lineSpacing()
-        pad = 6
-        x_text = self._cfg.padding_px
-        y_text = self._cfg.padding_px
+            fm = painter.fontMetrics()
+            line_h = fm.lineSpacing()
+            pad = 6
+            x_text = self._cfg.padding_px
+            y_text = self._cfg.padding_px
 
-        w_text = max(fm.horizontalAdvance(s) for s in hud_lines) if hud_lines else 0
-        h_text = line_h * len(hud_lines)
+            w_text = max(fm.horizontalAdvance(s) for s in hud_lines) if hud_lines else 0
+            h_text = line_h * len(hud_lines)
 
-        bg_rect = QRect(x_text - pad, y_text - pad, w_text + pad * 2, h_text + pad * 2)
+            bg_rect = QRect(x_text - pad, y_text - pad, w_text + pad * 2, h_text + pad * 2)
 
-        # Panel
-        painter.setBrush(QColor(0, 0, 0, 120))  # translucent black
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(bg_rect, 6, 6)
+            # Panel
+            painter.setBrush(QColor(0, 0, 0, 120))  # translucent black
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(bg_rect, 6, 6)
 
-        # Text
-        painter.setPen(QColor(self._cfg.hud_color))
-        for i, line in enumerate(hud_lines):
-            # drawText baseline is at y + ascent
-            painter.drawText(x_text, y_text + fm.ascent() + i * line_h, line)
+            # Text
+            painter.setPen(QColor(self._cfg.hud_color))
+            for i, line in enumerate(hud_lines):
+                # drawText baseline is at y + ascent
+                painter.drawText(x_text, y_text + fm.ascent() + i * line_h, line)
 
         painter.end()
 
@@ -480,6 +494,11 @@ class AlgorithmVisualizerBase(QWidget):
         self.right_panel: QWidget | None = None
         self.legend_label: QLabel | None = None
         self.metadata_view: QTextBrowser | None = None
+        self._hud_visible = True
+        self._show_values = False
+        self._external_total_steps = 0
+        self._precomputed_steps: list[Step] | None = None
+        self._total_steps_known = False
 
         # Ensure this widget really paints a dark background (not the parent’s light gray)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -512,15 +531,21 @@ class AlgorithmVisualizerBase(QWidget):
         self._comparisons = 0
         self._swaps = 0
         self._step_idx = 0
-        self._t0 = 0.0
         self._narration_default = ""
         self._shortcuts: list[QShortcut] = []
         self._current_preset = DEFAULT_PRESET_KEY
         self._current_seed: int | None = None
 
         # UI
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
+        self.pane = Pane(
+            visualizer=self,
+            step_forward=self.player_step_forward,
+            step_back=self.player_step_back,
+            step_index=self.player_step_index,
+            total_steps=self.total_steps,
+            on_finished=self._start_finish_animation,
+        )
+        self.transport = _VisualizerTransport(self)
 
         self._build_ui()
         self._rebind()
@@ -546,7 +571,9 @@ class AlgorithmVisualizerBase(QWidget):
         row.addWidget(lbl_input)
         self.le_input = QLineEdit()
         self.le_input.setPlaceholderText("e.g. 5,2,9,1,5,6")
+        self.le_input.setToolTip("Enter comma-separated integers")
         self.cmb_preset = QComboBox()
+        self.cmb_preset.setToolTip("Select a dataset preset")
         for preset in get_presets():
             self.cmb_preset.addItem(preset.label, preset.key)
             idx = self.cmb_preset.count() - 1
@@ -555,13 +582,27 @@ class AlgorithmVisualizerBase(QWidget):
         self.cmb_preset.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.le_seed = QLineEdit()
         self.le_seed.setPlaceholderText("seed (auto)")
-        self.le_seed.setFixedWidth(120)
+        self.le_seed.setFixedWidth(100)
+        self.le_seed.setToolTip("Random seed for reproducibility")
         self.btn_random = QPushButton("Generate")
+        self.btn_random.setToolTip("Generate random dataset")
+        self.btn_random.setObjectName("primary")
+
         self.btn_start = QPushButton("Start")
-        self.btn_pause = QPushButton("Pause/Resume")
+        self.btn_start.setToolTip("Start sorting animation (S)")
+        self.btn_start.setObjectName("primary")
+
+        self.btn_pause = QPushButton("Pause")
+        self.btn_pause.setToolTip("Pause/Resume animation (Space)")
+
         self.btn_reset = QPushButton("Reset")
-        self.btn_export = QPushButton("Export…")
+        self.btn_reset.setToolTip("Reset to initial array")
+
+        self.btn_export = QPushButton("Export")
+        self.btn_export.setToolTip("Export visualization data")
+
         self.btn_benchmark = QPushButton("Benchmark")
+        self.btn_benchmark.setToolTip("Run performance benchmark")
 
         row.addWidget(self.le_input)
         row.addWidget(self.cmb_preset)
@@ -583,6 +624,7 @@ class AlgorithmVisualizerBase(QWidget):
         self.sld_fps = QSlider(Qt.Orientation.Horizontal)
         self.sld_fps.setRange(self.cfg.fps_min, self.cfg.fps_max)
         self.sld_fps.setValue(self.cfg.fps_default)
+        self.sld_fps.setToolTip("Adjust animation speed")
         speed_row.addWidget(self.sld_fps, 1)
         self.spn_fps = QSpinBox()
         self.spn_fps.setRange(self.cfg.fps_min, self.cfg.fps_max)
@@ -599,9 +641,17 @@ class AlgorithmVisualizerBase(QWidget):
         self.lbl_scrub.setObjectName("caption")
         self.sld_scrub = QSlider(Qt.Orientation.Horizontal)
         self.sld_scrub.setRange(0, 0)
-        self.btn_step_fwd = QPushButton("Step ▶")
-        self.btn_step_back = QPushButton("Step ◀")
+        self.btn_step_fwd = QPushButton("▶")
+        self.btn_step_fwd.setToolTip("Step forward (Right Arrow)")
+        self.btn_step_fwd.setObjectName("icon_button")
+        self.btn_step_fwd.setMaximumWidth(32)
+
+        self.btn_step_back = QPushButton("◀")
+        self.btn_step_back.setToolTip("Step backward (Left Arrow)")
+        self.btn_step_back.setObjectName("icon_button")
+        self.btn_step_back.setMaximumWidth(32)
         self.chk_labels = QCheckBox("Show values")
+        self.chk_labels.setToolTip("Display array values above bars")
 
         icon_size = QSize(16, 16)
         for btn in (
@@ -616,16 +666,6 @@ class AlgorithmVisualizerBase(QWidget):
         ):
             btn.setIconSize(icon_size)
 
-        style = self.style()
-        if style is not None:
-            self.btn_random.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
-            self.btn_start.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
-            self.btn_pause.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaPause))
-            self.btn_reset.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogResetButton))
-            self.btn_export.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
-            self.btn_benchmark.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ComputerIcon))
-            self.btn_step_back.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
-            self.btn_step_fwd.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
         scrub_row.addWidget(self.lbl_scrub)
         scrub_row.addWidget(self.sld_scrub)
         scrub_row.addWidget(self.btn_step_back)
@@ -636,6 +676,7 @@ class AlgorithmVisualizerBase(QWidget):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.canvas = VisualizationCanvas(self._get_canvas_state, self.cfg)
+        self.canvas.set_show_labels(self._show_values)
         splitter.addWidget(self.canvas)
 
         self.lbl_narration = QLabel()
@@ -750,7 +791,13 @@ class AlgorithmVisualizerBase(QWidget):
         self.row_container.setVisible(self._show_controls)
         self.speed_container.setVisible(self._show_controls)
         self.scrub_container.setVisible(self._show_controls)
-        self.apply_theme(self._theme)
+
+        # Apply professional theme if available, otherwise use default
+        if generate_stylesheet is not None and self._show_controls:
+            # Only apply professional theme to single viewer
+            self.setStyleSheet(generate_stylesheet())
+        else:
+            self.apply_theme(self._theme)
 
     def _render_metadata(self) -> None:
         if self.metadata_view is None:
@@ -772,10 +819,12 @@ class AlgorithmVisualizerBase(QWidget):
 
         notes_html = ""
         if info.notes:
-            notes_items = "".join(f"<li>{escape(note)}</li>" for note in info.notes)
+            notes_items = "".join(
+                f"<li style='margin:2px 0;'>{escape(note)}</li>" for note in info.notes
+            )
             notes_html = (
-                "<p style='margin:0 0 4px 0;'><strong>Highlights</strong></p>"
-                f"<ul style='margin:0 0 8px 16px;'>{notes_items}</ul>"
+                "<p style='margin:8px 0 4px 0;'><strong>Highlights</strong></p>"
+                f"<ul style='margin:0 0 8px 0; padding-left:20px;'>{notes_items}</ul>"
             )
 
         complexity_rows = []
@@ -783,28 +832,130 @@ class AlgorithmVisualizerBase(QWidget):
             value = info.complexity.get(key)
             if value:
                 complexity_rows.append(
-                    f"<tr><th style='text-align:left;padding-right:8px;'>{label}</th>"
-                    f"<td>{escape(value)}</td></tr>"
+                    f"<tr><th style='text-align:left;padding:2px 12px 2px 0;font-weight:500;'>{label}:</th>"
+                    f"<td style='padding:2px 0;'>{escape(value)}</td></tr>"
                 )
         complexity_html = ""
         if complexity_rows:
             complexity_html = (
-                "<table style='border-collapse:collapse;font-size:12px;margin-top:4px;'>"
+                "<p style='margin:8px 0 4px 0;'><strong>Complexity</strong></p>"
+                "<table style='border-collapse:collapse;font-size:11px;margin:0 0 8px 0;'>"
                 + "".join(complexity_rows)
                 + "</table>"
             )
 
-        accent = self._theme_style.get("legend_fg", "#9cadcb")
+        accent = self._theme_style.get("legend_fg", "#a0a6b8")
         html = f"""
-<div style="font-size:13px; line-height:1.45;">
-  <p style="font-weight:600; margin:0 0 4px 0;">{escape(info.name)}</p>
-  <p style="margin:0 0 8px 0; color:{accent};">{trait_html}</p>
+<div style="font-size:12px; line-height:1.5; padding:4px;">
+  <p style="font-weight:600; margin:0 0 4px 0; font-size:14px;">{escape(info.name)}</p>
+  <p style="margin:0 0 6px 0; color:{accent}; font-size:11px;">{trait_html}</p>
   {desc_html}
   {notes_html}
   {complexity_html}
 </div>
 """
         self.metadata_view.setHtml(html)
+
+    # ---------- public adapters (Pane API) ----------
+
+    def set_show_hud(self, show: bool) -> None:
+        self._hud_visible = bool(show)
+        self.canvas.update()
+
+    def set_show_values(self, show: bool) -> None:
+        self._show_values = bool(show)
+        self.canvas.set_show_labels(self._show_values)
+        self.canvas.update()
+        with suppress(AttributeError):
+            self.chk_labels.blockSignals(True)
+            self.chk_labels.setChecked(self._show_values)
+            self.chk_labels.blockSignals(False)
+        self._settings.setValue("viz/show_values", int(self._show_values))
+
+    def show_values(self) -> bool:
+        return self._show_values
+
+    def total_steps(self) -> int:
+        return self._external_total_steps if self._total_steps_known else 0
+
+    def total_steps_known(self) -> bool:
+        return self._total_steps_known
+
+    # ---------- player bridge (public, no privates from callers) ----------
+
+    def player_step_forward(self) -> bool:
+        # If we have recorded steps and can advance within them
+        if self._step_idx < len(self._steps):
+            self._seek(self._step_idx + 1)
+            return True
+
+        # We're at or past the end of recorded steps
+        # Try to generate the next step
+        if self._step_source is not None:
+            result = self._advance_step()
+            # _advance_step will trigger finish animation if done
+            return result
+
+        # No more steps and no generator - we're already finished
+        # Don't trigger finish animation again, just return false
+        return False
+
+    def player_step_back(self) -> bool:
+        """Rewind one step if possible for external players."""
+        if self._step_idx > 0:
+            self._seek(self._step_idx - 1)
+            return True
+        return False
+
+    def player_step_index(self) -> int:
+        return self._step_idx
+
+    def player_reset(self) -> None:
+        self.pane.reset()
+        if self._initial_array:
+            self._set_array(self._initial_array, persist=False)
+        self._step_source = None
+
+    def set_fps(self, fps: int) -> None:
+        fps_clamped = max(self.cfg.fps_min, min(self.cfg.fps_max, int(fps)))
+        for widget in (self.sld_fps, self.spn_fps):
+            widget.blockSignals(True)
+            widget.setValue(fps_clamped)
+            widget.blockSignals(False)
+        self.pane.set_visual_fps(fps_clamped)
+        self._settings.setValue("viz/fps", fps_clamped)
+
+    def prime_external_run(self, array: list[int]) -> None:
+        if not array:
+            raise ValueError("Array cannot be empty")
+        self.pane.pause()
+        self._set_array(list(array), persist=False)
+        step_trace: list[Step] = []
+        exceeded_cap = False
+        try:
+            probe_generator = self._generate_steps(list(self._array))
+            for idx, step in enumerate(probe_generator, start=1):
+                if idx > PRECOMPUTE_STEP_CAP:
+                    exceeded_cap = True
+                    break
+                step_trace.append(step)
+        finally:
+            # Ensure the probe generator is exhausted if we broke early.
+            probe_generator = None
+
+        if exceeded_cap:
+            self._precomputed_steps = None
+            self._external_total_steps = 0
+            self._total_steps_known = False
+            self._step_source = self._generate_steps(list(self._array))
+        else:
+            self._precomputed_steps = step_trace
+            self._external_total_steps = len(step_trace)
+            self._total_steps_known = True
+            self._step_source = iter(step_trace)
+
+        self._update_ui_state("paused")
+        self._set_narration()
 
     def apply_theme(self, theme: str) -> None:
         if theme not in THEME_PRESETS:
@@ -839,7 +990,15 @@ class AlgorithmVisualizerBase(QWidget):
             f"<span style='color:{self.cfg.pivot_color};'>■</span> Pivot"
         )
 
+    def _apply_stylesheet_old(self) -> None:
+        # Disabled - using professional theme from ui_shared/professional_theme.py
+        return
+
     def _apply_stylesheet(self) -> None:
+        # Don't override the professional theme
+        return
+
+    def _apply_stylesheet_disabled(self) -> None:
         style = self._theme_style
         self.setStyleSheet(
             f"""
@@ -940,20 +1099,88 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self.sld_scrub.valueChanged.connect(self._on_scrub_move)
         self.btn_step_fwd.clicked.connect(self._on_step_forward)
         self.btn_step_back.clicked.connect(self._on_step_back)
-        self.chk_labels.toggled.connect(self.canvas.set_show_labels)
+        self.chk_labels.toggled.connect(self._on_labels_toggled)
+
+    # ---------- transport wrappers
+
+    def _transport_play(self) -> None:
+        if not self._ensure_run_is_ready():
+            return
+        self.pane.play()
+        self.txt_log.append(f"Started at {self.pane.player._visual_fps} FPS")
+        LOGGER.info(
+            "Start algo=%s fps=%d n=%d",
+            self.title,
+            self.pane.player._visual_fps,
+            len(self._array),
+        )
+        self._update_ui_state("running")
+
+    def _transport_toggle_pause(self) -> None:
+        if (
+            not self.pane.is_running
+            and self._step_source is None
+            and not self._ensure_run_is_ready()
+        ):
+            return
+        self.pane.toggle_pause()
+        running = self.pane.is_running
+        self.txt_log.append("Resumed" if running else "Paused")
+        self._update_ui_state("running" if running else "paused")
+
+    def _transport_reset(self) -> None:
+        self.pane.reset()
+        if self._initial_array:
+            self._set_array(self._initial_array, persist=False)
+        self._step_source = None
+        self.txt_log.append("Reset")
+        self._update_ui_state("idle")
+
+    def _transport_step_forward(self) -> None:
+        # If we have recorded steps and haven't reached the end yet, just step forward
+        if self._step_idx < len(self._steps):
+            self.pane.step_forward()
+            return
+
+        # Check if we're already at the end and finished
+        if (
+            self._step_source is None
+            and self._step_idx >= len(self._steps)
+            and len(self._steps) > 0
+        ):
+            # We're at the end, don't restart
+            return
+
+        # Only ensure run is ready if we need to generate new steps
+        if not self._ensure_run_is_ready():
+            return
+        self.pane.step_forward()
+
+    def _transport_step_back(self) -> None:
+        self.pane.step_back()
 
     def _install_shortcuts(self) -> None:
+        # Only install shortcuts if we're showing controls (Single mode)
+        # In Compare mode, shortcuts are handled by CompareWindow
+        if not self._show_controls:
+            return
+
         shortcuts = [
-            ("S", self._on_start),
-            ("Space", self._on_pause),
+            ("S", self._transport_play),
+            ("Space", self._transport_toggle_pause),
             ("R", self._on_randomize),
-            ("Left", lambda: self._seek_from_shortcut(self._step_idx - 1)),
-            ("Right", lambda: self._seek_from_shortcut(self._step_idx + 1)),
+            ("Left", self._transport_step_back),
+            ("Right", self._transport_step_forward),
         ]
         for seq, handler in shortcuts:
             shortcut = QShortcut(QKeySequence(seq), self)
             shortcut.activated.connect(handler)
             self._shortcuts.append(shortcut)
+
+    def disable_shortcuts(self) -> None:
+        """Disable all keyboard shortcuts (used in Compare mode)."""
+        for shortcut in self._shortcuts:
+            shortcut.setEnabled(False)
 
     def _restore_preferences(self) -> None:
         fps = int(self._settings.value("viz/fps", self.cfg.fps_default))
@@ -991,6 +1218,13 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
                 self._current_seed = None
         else:
             self._current_seed = None
+
+        show_values_pref = self._settings.value("viz/show_values", 0)
+        try:
+            show_values = bool(int(show_values_pref))
+        except (TypeError, ValueError):
+            show_values = False
+        self.set_show_values(show_values)
 
     def _persist_last_array(self, arr: list[int]) -> None:
         rendered = ",".join(str(v) for v in arr)
@@ -1036,7 +1270,10 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
     # ---------- state and metrics
 
     def _get_canvas_state(self) -> dict[str, Any]:
-        elapsed = time.time() - self._t0 if self._t0 else 0.0
+        # Use external_total_steps when known (algorithm complete)
+        # Otherwise use the current step count
+        total_steps = self._external_total_steps if self._total_steps_known else len(self._steps)
+
         return {
             "array": self._array,
             "highlights": self._highlights,
@@ -1047,11 +1284,13 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
                 "swaps": self._swaps,
                 "fps": self.sld_fps.value(),
                 "step_idx": self._step_idx,
-                "total_steps": len(self._steps) if self._steps else 0,
-                "elapsed_s": elapsed,
+                "total_steps": total_steps,
+                "elapsed_s": self.pane.logical_seconds(),
+                "wall_elapsed_s": self.pane.elapsed_seconds(),
                 "preset": self._current_preset,
                 "seed": self._current_seed,
             },
+            "hud_visible": self._hud_visible,
         }
 
     def _set_array(self, arr: list[int], *, persist: bool = True) -> None:
@@ -1059,6 +1298,9 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
             raise ValueError("Array cannot be empty")
         self._array = list(arr)
         self._initial_array = list(arr)
+        self._external_total_steps = 0
+        self._precomputed_steps = None
+        self._total_steps_known = False
         if persist:
             self._persist_last_array(arr)
             self._current_preset = "custom"
@@ -1088,6 +1330,12 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self._checkpoints.append((step_idx, list(self._array), self._comparisons, self._swaps))
 
     # ---------- controls
+
+    def _on_labels_toggled(self, checked: bool) -> None:
+        self._show_values = bool(checked)
+        self.canvas.set_show_labels(self._show_values)
+        self.canvas.update()
+        self._settings.setValue("viz/show_values", int(self._show_values))
 
     def _on_randomize(self) -> None:
         try:
@@ -1119,7 +1367,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         except Exception as e:
             self._error(str(e))
 
-    def _prepare_run(self) -> bool:
+    def _ensure_run_is_ready(self) -> bool:
         # If we already have a generator in progress, nothing to do.
         if self._step_source is not None:
             return True
@@ -1138,7 +1386,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
                     return False
 
         self._step_source = self._generate_steps(list(self._array))
-        self._t0 = time.time()
+        self.pane.reset()
         self._update_ui_state("paused")
         return True
 
@@ -1154,40 +1402,21 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
 
     def _on_start(self) -> None:
         try:
-            if not self._prepare_run():
-                return
-            fps = max(self.cfg.fps_min, min(self.cfg.fps_max, self.sld_fps.value()))
-            self._timer.start(int(1000 / fps))
-            self.txt_log.append(f"Started at {fps} FPS")
-            LOGGER.info("Start algo=%s fps=%d n=%d", self.title, fps, len(self._array))
-            self._update_ui_state("running")
+            self._transport_play()
         except Exception as e:
             self._error(str(e))
 
     def _on_pause(self) -> None:
-        if self._timer.isActive():
-            self._timer.stop()
-            self.txt_log.append("Paused")
-            self._update_ui_state("paused")
-        else:
-            if self._step_source is None and (
-                self._confirm_progress >= 0 or not self._steps or self._step_idx >= len(self._steps)
-            ):
-                self._warn("Nothing to resume.")
-                return
-            fps = max(self.cfg.fps_min, min(self.cfg.fps_max, self.sld_fps.value()))
-            self._timer.start(int(1000 / fps))
-            self.txt_log.append("Resumed")
-            self._update_ui_state("running")
+        try:
+            self._transport_toggle_pause()
+        except Exception as e:
+            self._error(str(e))
 
     def _on_reset(self) -> None:
-        self._timer.stop()
-        self._step_source = None
-        self._confirm_progress = -1
-        if self._initial_array:
-            self._set_array(self._initial_array, persist=False)
-        self.txt_log.append("Reset")
-        self._update_ui_state("idle")
+        try:
+            self._transport_reset()
+        except Exception as e:
+            self._error(str(e))
 
     def _on_fps_changed(self, v: int) -> None:
         # keep slider/spin synchronized without causing recursive events
@@ -1199,8 +1428,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
 
         clamped = max(self.cfg.fps_min, min(self.cfg.fps_max, int(v)))
         self._settings.setValue("viz/fps", clamped)
-        if self._timer.isActive():
-            self._timer.start(int(1000 / max(1, clamped)))
+        self.pane.set_visual_fps(clamped)
 
     def _on_export(self) -> None:
         if not self._steps:
@@ -1490,11 +1718,6 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
 
     # ---------- animation tick
 
-    def _tick(self) -> None:
-        advanced = self._advance_step()
-        if not advanced and self._step_source is None and self._confirm_progress < 0:
-            self._timer.stop()
-
     def _advance_step(self) -> bool:
         if self._step_source is None:
             return False
@@ -1529,89 +1752,33 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         LOGGER.info(
             "Finished algo=%s comps=%d swaps=%d", self.title, self._comparisons, self._swaps
         )
+        if not self._external_total_steps:
+            self._external_total_steps = len(self._steps)
+        self._total_steps_known = True
         self._confirm_progress = 0
         self._confirm_indices = tuple()
         self._set_narration("Sort complete. Finalizing display…")
 
-        # Rebind timer to finish sweep at high FPS
-        with suppress(TypeError):
-            self._timer.timeout.disconnect(self._tick)
-        with suppress(TypeError):
-            self._timer.timeout.disconnect(self._finish_tick)
-        self._timer.timeout.connect(self._finish_tick)
-        self._timer.start(int(1000 / 60))
+        # Update canvas to show numbers immediately
+        self.canvas.update()
+
+        # Use a new, temporary timer for the finish sweep.
+        finish_timer = QTimer(self)  # Parented to self for auto-cleanup
+        finish_timer.timeout.connect(lambda: self._finish_tick(finish_timer))
+        finish_timer.start(int(1000 / 60))
         self._update_ui_state("finished")
 
-    def _finish_tick(self) -> None:
+    def _finish_tick(self, timer: QTimer) -> None:
         if self._confirm_progress < len(self._array):
             idx = self._confirm_progress
             self._confirm_indices = tuple(list(self._confirm_indices) + [idx])
             self._confirm_progress += 1
             self.canvas.update()
         else:
-            self._timer.stop()
-            # Restore normal binding
-            with suppress(TypeError):
-                self._timer.timeout.disconnect(self._finish_tick)
-            with suppress(TypeError):
-                self._timer.timeout.disconnect(self._tick)
-            self._timer.timeout.connect(self._tick)
+            timer.stop()
+            timer.deleteLater()  # Clean up the timer
             self._set_narration("Array sorted!")
             self._confirm_progress = -1
-
-    # ---------- step application and highlights
-
-    def _narrate_step(self, step: Step) -> str:
-        arr = self._array
-        op = step.op
-        idx = step.indices
-        payload = step.payload
-
-        def safe_get(i: int) -> int | None:
-            return arr[i] if 0 <= i < len(arr) else None
-
-        try:
-            if op == "compare":
-                i, j = idx
-                return f"Comparing {safe_get(i)} (index {i}) with " f"{safe_get(j)} (index {j})."
-            if op == "merge_compare":
-                i, j = idx
-                dest = payload if isinstance(payload, int) else "?"
-                return (
-                    f"Comparing {safe_get(i)} (index {i}) with {safe_get(j)} (index {j}) "
-                    f"for position {dest}."
-                )
-            if op == "swap":
-                i, j = idx
-                if payload and isinstance(payload, tuple) and len(payload) == 2:
-                    val1, val2 = payload
-                    return f"Swapping {val1} (index {i}) with {val2} (index {j})."
-                return f"Swapping elements at indices {i} and {j}."
-            if op == "set":
-                k = idx[0]
-                old_val = safe_get(k)
-                return f"Setting index {k} from {old_val} to {payload}."
-            if op == "shift":
-                k = idx[0]
-                return f"Shifting {payload} into index {k}."
-            if op == "pivot":
-                p = idx[0]
-                return f"Selecting {safe_get(p)} at index {p} as the pivot."
-            if op == "merge_mark":
-                lo, hi = idx
-                return f"Marking merge range {lo} – {hi}."
-            if op == "key":
-                if not idx:
-                    return "Key placement complete."
-                target = idx[0]
-                return f"Tracking key {payload} (target index {target})."
-            if op == "confirm" and idx:
-                i = idx[0]
-                return f"Confirming index {i} as sorted."
-        except (IndexError, ValueError, TypeError):
-            return ""
-
-        return ""
 
     def _append_step_list(self, step: Step) -> None:
         current_idx = len(self._steps)
@@ -1690,40 +1857,24 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self.lbl_scrub.setText(f"Step: {self._step_idx}/{total}")
 
     def _on_scrub_move(self, val: int) -> None:
-        if self._timer.isActive():
-            self._timer.stop()
-            self._update_ui_state("paused")
+        self.pane.pause()
         self._seek(val)
 
-    def _seek_from_shortcut(self, target_idx: int) -> None:
-        if self._timer.isActive():
-            self._timer.stop()
-            self._update_ui_state("paused")
+    def _seek_from_shortcut(self, target_idx: int):
+        self.pane.pause()
         self._seek(target_idx)
 
     def _on_step_forward(self) -> None:
-        if self._timer.isActive():
-            self._timer.stop()
         try:
-            if self._step_source is None and not self._steps and not self._prepare_run():
-                return
-            if self._step_idx < len(self._steps):
-                self._seek(self._step_idx + 1)
-                self._update_ui_state("paused")
-                return
-            if self._advance_step():
-                self._update_ui_state("paused")
-            else:
-                self._update_ui_state("finished" if self._confirm_progress >= 0 else "paused")
-        except Exception as exc:
-            self._error(str(exc))
+            self._transport_step_forward()
+        except Exception as e:
+            self._error(str(e))
 
     def _on_step_back(self) -> None:
-        if self._timer.isActive():
-            self._timer.stop()
-        if self._step_idx > 0:
-            self._seek(self._step_idx - 1)
-            self._update_ui_state("paused")
+        try:
+            self._transport_step_back()
+        except Exception as e:
+            self._error(str(e))
 
     def _seek(self, target_idx: int) -> None:
         target_idx = max(0, min(len(self._steps), target_idx))
@@ -1823,8 +1974,8 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
     # ---------- utils
 
     def pause_if_running(self) -> None:
-        if self._timer.isActive():
-            self._timer.stop()
+        if self.pane.is_running:
+            self.pane.pause()
             self.txt_log.append("Paused (auto)")
             self._update_ui_state("paused")
 
@@ -1839,3 +1990,90 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self.txt_log.append(f"[ERROR] {msg}")
         LOGGER.exception(msg)
         QMessageBox.critical(self, self.title, msg)
+
+    # ---------- step application and highlights
+
+    def _narrate_step(self, step: Step) -> str:
+        arr = self._array
+        op = step.op
+        idx = step.indices
+        payload = step.payload
+
+        def safe_get(i: int) -> int | None:
+            return arr[i] if 0 <= i < len(arr) else None
+
+        try:
+            if op == "compare":
+                i, j = idx
+                return f"Comparing {safe_get(i)} (index {i}) with " f"{safe_get(j)} (index {j})."
+            if op == "merge_compare":
+                i, j = idx
+                dest = payload if isinstance(payload, int) else "?"
+                return (
+                    f"Comparing {safe_get(i)} (index {i}) with {safe_get(j)} (index {j}) "
+                    f"for position {dest}."
+                )
+            if op == "swap":
+                i, j = idx
+                if payload and isinstance(payload, tuple) and len(payload) == 2:
+                    val1, val2 = payload
+                    return f"Swapping {val1} (index {i}) with {val2} (index {j})."
+                return f"Swapping elements at indices {i} and {j}."
+            if op == "set":
+                k = idx[0]
+                old_val = safe_get(k)
+                return f"Setting index {k} from {old_val} to {payload}."
+            if op == "shift":
+                k = idx[0]
+                return f"Shifting {payload} into index {k}."
+            if op == "pivot":
+                p = idx[0]
+                return f"Selecting {safe_get(p)} at index {p} as the pivot."
+            if op == "merge_mark":
+                lo, hi = idx
+                return f"Marking merge range {lo} – {hi}."
+            if op == "key":
+                if not idx:
+                    return "Key placement complete."
+                target = idx[0]
+                return f"Tracking key {payload} (target index {target})."
+            if op == "confirm" and idx:
+                i = idx[0]
+                return f"Confirming index {i} as sorted."
+        except (IndexError, ValueError, TypeError):
+            return ""
+
+        return ""
+
+
+class _VisualizerTransport:
+    def __init__(self, visualizer: AlgorithmVisualizerBase) -> None:
+        self._viz = visualizer
+
+    def play(self) -> None:
+        self._viz._transport_play()
+
+    def toggle_pause(self) -> None:
+        self._viz._transport_toggle_pause()
+
+    def pause(self) -> None:
+        if self._viz.pane.is_running:
+            self._viz._transport_toggle_pause()
+
+    def reset(self) -> None:
+        self._viz._transport_reset()
+
+    def step_forward(self) -> None:
+        self._viz._transport_step_forward()
+
+    def step_back(self) -> None:
+        self._viz._transport_step_back()
+
+    def capabilities(self) -> dict[str, bool]:
+        return self._viz.pane.capabilities()
+
+    def set_capability(self, key: str, value: bool) -> None:
+        self._viz.pane.set_capability(key, value)
+
+    def is_running(self) -> bool:
+        return self._viz.pane.is_running

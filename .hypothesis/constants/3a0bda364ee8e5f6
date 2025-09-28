@@ -1,4 +1,0 @@
-# file: /Users/jguida941/Downloads/MergeSortAlgorithm-master/src/app/algos/quick.py
-# hypothesis_version: 6.140.2
-
-['O(n log n)', 'O(n^2)', 'Quick Sort', 'avg', 'best', 'compare', 'pivot', 'swap', 'worst']

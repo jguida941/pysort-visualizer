@@ -3,6 +3,7 @@ from collections.abc import Generator
 from typing import cast
 
 import pytest
+from PyQt6.QtCore import QEventLoop, QTimer
 from PyQt6.QtWidgets import QApplication
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -16,3 +17,20 @@ def qapp() -> Generator[QApplication, None, None]:
     app.setOrganizationName("SortingViz")
     app.setApplicationName("Sorting Visualizer")
     yield app
+
+
+@pytest.fixture()
+def qtbot(qapp: QApplication):  # type: ignore[override]
+    class _QtBot:
+        def __init__(self, app: QApplication) -> None:
+            self._app = app
+
+        def wait(self, ms: int) -> None:
+            loop = QEventLoop()
+            timer = QTimer()
+            timer.setSingleShot(True)
+            timer.timeout.connect(loop.quit)
+            timer.start(ms)
+            loop.exec()
+
+    return _QtBot(qapp)

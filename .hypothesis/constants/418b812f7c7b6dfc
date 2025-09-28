@@ -1,4 +1,0 @@
-# file: /Users/jguida941/Downloads/MergeSortAlgorithm-master/src/app/algos/timsort_trace.py
-# hypothesis_version: 6.140.2
-
-['O(n log n)', 'O(n)', 'Timsort Trace', 'avg', 'best', 'compare', 'confirm', 'key', 'merge_compare', 'merge_mark', 'set', 'shift', 'worst']
