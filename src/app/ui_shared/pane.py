@@ -89,6 +89,9 @@ class Pane(QObject):
     def logical_seconds(self) -> float:
         return self.player.logical_seconds()
 
+    def sync_to_step(self, step_index: int) -> None:
+        self.player.sync_to_step(step_index)
+
     # ------------------------------------------------------------------ view helpers
 
     def set_hud_visible(self, show: bool) -> None:

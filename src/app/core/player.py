@@ -194,6 +194,31 @@ class Player(QObject):
         self.elapsed_updated.emit(self.elapsed_seconds())
         self.logical_elapsed_updated.emit(self.logical_seconds())
 
+    def sync_to_step(self, step_index: int) -> None:
+        """Force internal timers to match an external seek operation."""
+        target = max(0, int(step_index))
+        current = len(self._step_durations)
+
+        if target < current:
+            removed = self._step_durations[target:]
+            if removed:
+                self._logical_accum = max(0.0, self._logical_accum - sum(removed))
+                del self._step_durations[target:]
+        elif target > current:
+            dt = self._step_duration_nominal()
+            missing = target - current
+            if missing > 0:
+                self._step_durations.extend([dt] * missing)
+                self._logical_accum += missing * dt
+
+        if target == 0:
+            self._logical_accum = 0.0
+            self._step_durations.clear()
+
+        self._frames = target
+        self._completed = False
+        self.logical_elapsed_updated.emit(self.logical_seconds())
+
     def step_forward(self) -> None:
         self.pause()
         if self._completed:

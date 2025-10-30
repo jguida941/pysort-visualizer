@@ -1296,6 +1296,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
     def _set_array(self, arr: list[int], *, persist: bool = True) -> None:
         if not arr:
             raise ValueError("Array cannot be empty")
+        self.pane.reset()
         self._array = list(arr)
         self._initial_array = list(arr)
         self._external_total_steps = 0
@@ -1859,10 +1860,12 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
     def _on_scrub_move(self, val: int) -> None:
         self.pane.pause()
         self._seek(val)
+        self.pane.sync_to_step(self._step_idx)
 
     def _seek_from_shortcut(self, target_idx: int):
         self.pane.pause()
         self._seek(target_idx)
+        self.pane.sync_to_step(self._step_idx)
 
     def _on_step_forward(self) -> None:
         try:
