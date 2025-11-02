@@ -1,3 +1,44 @@
+"""Core visualization engine and base visualizer widget.
+
+This module contains the foundational classes for the PySort visualization system:
+- AlgorithmVisualizerBase: The main widget that orchestrates algorithm visualization
+- VisualizationCanvas: Qt widget that renders the array as colored bars
+- VizConfig: Configuration dataclass for visualization parameters
+- Supporting utilities for logging, theming, and crash handling
+
+The AlgorithmVisualizerBase class is the heart of the application. It:
+- Manages algorithm execution and step generation
+- Provides play/pause/step/reset controls
+- Renders the visualization using a Qt canvas
+- Handles scrubbing (seeking to arbitrary steps)
+- Exports visualizations to various formats (CSV, JSON, PNG, GIF)
+- Manages UI state transitions and user interactions
+
+Key Design Patterns:
+- Generator-based step iteration for memory efficiency
+- Checkpoint system for efficient scrubbing (periodic snapshots)
+- State machine for UI button enable/disable logic
+- Transport layer for decoupling playback controls
+
+The visualizer can run in two modes:
+1. Full UI mode (show_controls=True): Standalone visualizer with all controls
+2. Embedded mode (show_controls=False): Canvas-only for compare view
+
+Architecture:
+    AlgorithmVisualizerBase
+    ├── VisualizationCanvas (renders bars)
+    ├── Pane (manages Player for playback)
+    ├── Transport (exposes playback methods)
+    └── UI Controls (input, presets, FPS, export, etc.)
+
+Example:
+    >>> from app.algos.registry import REGISTRY, INFO
+    >>> algo_func = REGISTRY["Bubble Sort"]
+    >>> algo_info = INFO["Bubble Sort"]
+    >>> viz = AlgorithmVisualizerBase(algo_info, algo_func)
+    >>> viz.show()  # Display the visualizer window
+"""
+
 from __future__ import annotations
 
 import csv
