@@ -186,19 +186,8 @@ class CompareView(QWidget):
 
         # Keep controls visible by default - no separate hide button needed
 
-        # Create a vertical layout for control panels
-        self.controls_container = QWidget()
-        controls_layout = QVBoxLayout(self.controls_container)
-        controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(8)
-
-        # Add dataset card and transport card vertically
-        self.dataset_card = self._build_dataset_card(algo_names)
-        self.transport_card = self._build_transport_card()
-
-        controls_layout.addWidget(self.dataset_card)
-        controls_layout.addWidget(self.transport_card)
-
+        # Create a single unified control panel
+        self.controls_container = self._build_unified_controls(algo_names)
         root.addWidget(self.controls_container)
 
         # Remove redundant status strip - we can see the algorithms already
@@ -217,21 +206,25 @@ class CompareView(QWidget):
         root.addWidget(note)
         self._refresh_controller()
 
-    def _build_dataset_card(self, algo_names: list[str]) -> QFrame:
+    def _build_unified_controls(self, algo_names: list[str]) -> QFrame:
+        """Build a single unified control bar combining dataset and transport controls."""
         card = self._make_card()
-        layout = QHBoxLayout(card)
-        layout.setContentsMargins(SPACING["sm"], SPACING["sm"], SPACING["sm"], SPACING["sm"])
-        layout.setSpacing(SPACING["md"])
+        card.setObjectName("unified_controls")
 
-        # Left side - Algorithm selectors
+        # Main horizontal layout
+        main_layout = QHBoxLayout(card)
+        main_layout.setContentsMargins(SPACING["sm"], SPACING["sm"], SPACING["sm"], SPACING["sm"])
+        main_layout.setSpacing(SPACING["md"])
+
+        # Left section - Algorithm selectors
         algo_section = QHBoxLayout()
-        algo_section.setSpacing(SPACING["sm"])
+        algo_section.setSpacing(SPACING["xs"])
 
         lbl_left = QLabel("Left:")
         lbl_left.setObjectName("control_label")
         self.left_combo = QComboBox()
         self.left_combo.setObjectName("algo_selector")
-        self.left_combo.setMinimumWidth(150)
+        self.left_combo.setMinimumWidth(120)
         for name in algo_names:
             self.left_combo.addItem(name, name)
 
@@ -239,7 +232,7 @@ class CompareView(QWidget):
         lbl_right.setObjectName("control_label")
         self.right_combo = QComboBox()
         self.right_combo.setObjectName("algo_selector")
-        self.right_combo.setMinimumWidth(150)
+        self.right_combo.setMinimumWidth(120)
         for name in algo_names:
             self.right_combo.addItem(name, name)
 
@@ -248,113 +241,87 @@ class CompareView(QWidget):
         algo_section.addWidget(lbl_right)
         algo_section.addWidget(self.right_combo)
 
-        # Middle - Array input and preset
+        # Array and preset section
         data_section = QHBoxLayout()
-        data_section.setSpacing(SPACING["sm"])
+        data_section.setSpacing(SPACING["xs"])
 
         lbl_array = QLabel("Array:")
         lbl_array.setObjectName("control_label")
         self.array_edit = QLineEdit()
         self.array_edit.setObjectName("array_input")
         self.array_edit.setPlaceholderText("e.g., 5,2,9,1,5,6")
-        self.array_edit.setMinimumWidth(200)
+        self.array_edit.setMinimumWidth(150)
 
         lbl_preset = QLabel("Preset:")
         lbl_preset.setObjectName("control_label")
         self.preset_combo = QComboBox()
         self.preset_combo.setObjectName("preset_selector")
-        self.preset_combo.setMinimumWidth(120)
+        self.preset_combo.setMinimumWidth(100)
         for preset in get_presets():
             self.preset_combo.addItem(preset.label, preset.key)
-
-        data_section.addWidget(lbl_array)
-        data_section.addWidget(self.array_edit)
-        data_section.addWidget(lbl_preset)
-        data_section.addWidget(self.preset_combo)
-
-        # Right side - Seed and Generate
-        gen_section = QHBoxLayout()
-        gen_section.setSpacing(SPACING["sm"])
 
         lbl_seed = QLabel("Seed:")
         lbl_seed.setObjectName("control_label")
         self.seed_edit = QLineEdit()
         self.seed_edit.setObjectName("seed_input")
         self.seed_edit.setPlaceholderText("auto")
-        self.seed_edit.setMinimumWidth(120)  # Increased width for better readability
+        self.seed_edit.setFixedWidth(100)
 
         self.generate_button = QPushButton("Generate")
         self.generate_button.setObjectName("generate_button")
-        self.generate_button.setFixedWidth(100)
+        self.generate_button.setFixedWidth(90)
 
-        gen_section.addWidget(lbl_seed)
-        gen_section.addWidget(self.seed_edit)
-        gen_section.addWidget(self.generate_button)
+        data_section.addWidget(lbl_array)
+        data_section.addWidget(self.array_edit)
+        data_section.addWidget(lbl_preset)
+        data_section.addWidget(self.preset_combo)
+        data_section.addWidget(lbl_seed)
+        data_section.addWidget(self.seed_edit)
+        data_section.addWidget(self.generate_button)
 
-        # Add all sections
-        layout.addLayout(algo_section)
-        layout.addStretch()
-        layout.addLayout(data_section)
-        layout.addStretch()
-        layout.addLayout(gen_section)
+        # Separator line
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setObjectName("control_separator")
+        separator.setStyleSheet(f"background: {COLORS['border_subtle']}; width: 1px;")
 
-        self.left_combo.currentIndexChanged.connect(self._on_left_algo_changed)
-        self.right_combo.currentIndexChanged.connect(self._on_right_algo_changed)
-        self.generate_button.clicked.connect(self._on_generate_clicked)
-        self.array_edit.textChanged.connect(self._mark_dataset_dirty)
-        self.preset_combo.currentIndexChanged.connect(self._mark_dataset_dirty)
-        self.seed_edit.textChanged.connect(self._mark_dataset_dirty)
-
-        card.setMaximumHeight(60)  # Compact single row height
-        return card
-
-    def _build_transport_card(self) -> QFrame:
-        card = self._make_card()
-        layout = QHBoxLayout(card)
-        layout.setContentsMargins(SPACING["md"], SPACING["sm"], SPACING["md"], SPACING["sm"])
-        layout.setSpacing(SPACING["md"])  # More spacing between sections
-
-        # Transport buttons section - with proper spacing
-        button_section = QHBoxLayout()
-        button_section.setSpacing(SPACING["sm"])  # Increased spacing between buttons
+        # Transport controls
+        transport_section = QHBoxLayout()
+        transport_section.setSpacing(SPACING["xs"])
 
         self.start_button = QPushButton("Start")
         self.start_button.setObjectName("transport_button")
-
         self.pause_button = QPushButton("Pause")
         self.pause_button.setObjectName("transport_button")
-
         self.reset_button = QPushButton("Reset")
         self.reset_button.setObjectName("transport_button")
-
         self.step_back_button = QPushButton("Step")
         self.step_back_button.setObjectName("transport_button")
-
         self.step_forward_button = QPushButton("Step")
         self.step_forward_button.setObjectName("transport_button")
 
-        button_section.addWidget(self.start_button)
-        button_section.addWidget(self.pause_button)
-        button_section.addWidget(self.reset_button)
-        button_section.addWidget(self.step_back_button)
-        button_section.addWidget(self.step_forward_button)
+        transport_section.addWidget(self.start_button)
+        transport_section.addWidget(self.pause_button)
+        transport_section.addWidget(self.reset_button)
+        transport_section.addWidget(self.step_back_button)
+        transport_section.addWidget(self.step_forward_button)
 
-        # FPS control section
+        # FPS control
         fps_section = QHBoxLayout()
-        fps_section.setSpacing(SPACING["sm"])
+        fps_section.setSpacing(SPACING["xs"])
 
         fps_label = QLabel("FPS:")
         fps_label.setObjectName("control_label")
         self.fps_slider = QSlider(Qt.Orientation.Horizontal)
         self.fps_slider.setRange(1, 60)
         self.fps_slider.setValue(24)
-        self.fps_slider.setFixedWidth(200)  # Wider for better control
+        self.fps_slider.setFixedWidth(150)
 
         self.fps_spin = QSpinBox()
         self.fps_spin.setRange(1, 60)
         self.fps_spin.setValue(24)
         self.fps_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        self.fps_spin.setFixedWidth(50)
+        self.fps_spin.setFixedWidth(40)
         self.fps_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         fps_section.addWidget(fps_label)
@@ -365,22 +332,22 @@ class CompareView(QWidget):
         self.show_values_check = QCheckBox("Show values")
         self.show_values_check.setObjectName("control_checkbox")
 
-        # Hide controls toggle with label
-        self.controls_toggle = QPushButton("▼ Hide")
-        self.controls_toggle.setCheckable(True)
-        self.controls_toggle.setToolTip("Toggle dataset controls visibility")
-        self.controls_toggle.setObjectName("transport_button")
-        self.controls_toggle.setFixedWidth(80)
-        self.controls_toggle.toggled.connect(self._on_controls_toggled)
+        # Add all sections to main layout
+        main_layout.addLayout(algo_section)
+        main_layout.addLayout(data_section)
+        main_layout.addWidget(separator)
+        main_layout.addLayout(transport_section)
+        main_layout.addStretch()
+        main_layout.addLayout(fps_section)
+        main_layout.addWidget(self.show_values_check)
 
-        # Add all sections to main layout with proper spacing
-        layout.addLayout(button_section)
-        layout.addStretch(1)  # Add flexible space
-        layout.addLayout(fps_section)
-        layout.addWidget(self.show_values_check)
-        layout.addWidget(self.controls_toggle)
-
-        # Connect signals
+        # Connect all signals
+        self.left_combo.currentIndexChanged.connect(self._on_left_algo_changed)
+        self.right_combo.currentIndexChanged.connect(self._on_right_algo_changed)
+        self.generate_button.clicked.connect(self._on_generate_clicked)
+        self.array_edit.textChanged.connect(self._mark_dataset_dirty)
+        self.preset_combo.currentIndexChanged.connect(self._mark_dataset_dirty)
+        self.seed_edit.textChanged.connect(self._mark_dataset_dirty)
         self.start_button.clicked.connect(self._on_start_clicked)
         self.pause_button.clicked.connect(self._on_pause_clicked)
         self.reset_button.clicked.connect(self._on_reset_clicked)
@@ -390,9 +357,11 @@ class CompareView(QWidget):
         self.fps_spin.valueChanged.connect(self._on_fps_changed)
         self.show_values_check.toggled.connect(self._on_show_values_toggled)
 
-        card.setMaximumHeight(60)  # Compact single row height
+        # Set reasonable height
+        card.setMaximumHeight(60)
         self._update_transport_capabilities()
         return card
+
 
     def _compose_pane(self, state: _SideState) -> QWidget:
         container = QWidget()
@@ -552,11 +521,6 @@ class CompareView(QWidget):
     def _on_toggle_details(self, state: _SideState, checked: bool) -> None:
         self._set_detail_state(state, checked, persist=True)
 
-    def _on_controls_toggled(self, hidden: bool) -> None:
-        # Toggle only the dataset card visibility
-        self.dataset_card.setVisible(not hidden)
-        self.controls_toggle.setText("▲ Show" if hidden else "▼ Hide")
-        self.controls_toggle.setToolTip("Show dataset controls" if hidden else "Hide dataset controls")
 
     def _mark_dataset_dirty(self) -> None:
         self._dataset_ready = False

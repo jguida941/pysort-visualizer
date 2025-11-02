@@ -63,7 +63,7 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
        CONTROL CARDS - Dark background consistent with main theme
        ======================================================================== */
 
-    QFrame#compare_card {{
+    QFrame#compare_card, QFrame#unified_controls {{
         background-color: {bg_secondary};  /* Force dark background */
         border: 1px solid {border_subtle};
         border-radius: 6px;
