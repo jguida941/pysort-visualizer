@@ -414,12 +414,16 @@ class VisualizationCanvas(QWidget):
             else:
                 preset_display = "Custom"
             seed_value = metrics.get("seed")
-            seed_display = "-" if seed_value in (None, "") else str(seed_value)
+            # Only show seed if there actually is one (not None or empty)
+            if seed_value not in (None, ""):
+                preset_line = f"Preset: {preset_display} | Seed={seed_value}"
+            else:
+                preset_line = f"Preset: {preset_display}"
             logical_elapsed = metrics.get("elapsed_s", 0.0)
             wall_elapsed = metrics.get("wall_elapsed_s", logical_elapsed)
             hud_lines = [
                 f"Algo: {metrics.get('algo','')}",
-                f"Preset: {preset_display} | Seed={seed_display}",
+                preset_line,
                 f"n={len(arr) if arr else 0} | FPS={metrics.get('fps', 0)}",
                 f"Compare={metrics.get('comparisons', 0)} | Swaps={metrics.get('swaps', 0)}",
                 (
@@ -503,7 +507,7 @@ class AlgorithmVisualizerBase(QWidget):
         # Debounce timer for auto-applying typed input
         self._input_debounce_timer = QTimer(self)
         self._input_debounce_timer.setSingleShot(True)
-        self._input_debounce_timer.setInterval(500)  # 500ms delay after typing stops
+        self._input_debounce_timer.setInterval(1500)  # 1.5 second delay after typing stops
         self._input_debounce_timer.timeout.connect(self._try_auto_apply_input)
 
         # Ensure this widget really paints a dark background (not the parent's light gray)

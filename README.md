@@ -23,7 +23,7 @@ A PyQt6 desktop playground for exploring classic sorting algorithms through dete
 
 ## Feature Highlights
 
-- **Single Visualizer (stable):** One tab per algorithm with synced HUD, narration, export tools, theme toggle, and keyboard/mouse controls. Manual input fields automatically apply values 500ms after you stop typing.
+- **Single Visualizer (stable):** One tab per algorithm with synced HUD, narration, export tools, theme toggle, and keyboard/mouse controls. Manual input fields automatically apply values 1.5 seconds after you stop typing.
 - **Compare Mode (WIP):** Launch a dual-pane workspace from the launcher to evaluate two algorithms side by side. The UI loads, but final UX polish, keyboard overrides, and replay parity are still in progress—treat this as a preview build. Auto-apply input feature is available in Compare Mode.
 - **Deterministic algorithm engine:** Bubble, Insertion, Selection, Heap, Shell, Merge (bottom-up), Quick (median-of-three), Cocktail, Counting, Radix (LSD), Bucket, Comb, and a Timsort trace all register through a plugin system and emit strongly typed `Step` records.
 - **Reproducible data presets:** Generate random, nearly-sorted, reverse, reverse-run, few-unique, or already-sorted datasets with a visible seed so anyone can recreate a run exactly.
@@ -94,7 +94,7 @@ You will land on the launcher window:
 
 ## Working with the Single Visualizer
 
-- Enter comma-separated integers in the input field (numbers are automatically applied 500ms after you stop typing) or click **Generate** to use the active preset/seed.
+- Enter comma-separated integers in the input field (numbers are automatically applied 1.5 seconds after you stop typing) or click **Generate** to use the active preset/seed.
 - Use **Start**, **Step ▶**, **Step ◀**, the timeline slider, or keyboard shortcuts to navigate. Every action replays the canonical `Step` sequence—no frame skipping.
 - Toggle **Show values** at small `n` to annotate each bar.
 - Click **Export** to choose CSV, JSON, PNG, or GIF. PNG renders the current canvas. GIF synthesizes the animation from captured frames; you must play through the run first.

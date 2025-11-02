@@ -76,7 +76,7 @@ class CompareView(QWidget):
         # Debounce timer for auto-applying typed input
         self._input_debounce_timer = QTimer(self)
         self._input_debounce_timer.setSingleShot(True)
-        self._input_debounce_timer.setInterval(500)  # 500ms delay after typing stops
+        self._input_debounce_timer.setInterval(1500)  # 1.5 second delay after typing stops
         self._input_debounce_timer.timeout.connect(self._try_auto_apply_input)
 
         algo_names = sorted(INFO.keys())
@@ -293,8 +293,8 @@ class CompareView(QWidget):
         self.right_combo.currentIndexChanged.connect(self._on_right_algo_changed)
         self.generate_button.clicked.connect(self._on_generate_clicked)
         self.array_edit.textChanged.connect(self._mark_dataset_dirty)
-        self.preset_combo.currentIndexChanged.connect(self._mark_dataset_dirty)
-        self.seed_edit.textChanged.connect(self._mark_dataset_dirty)
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_or_seed_changed)
+        self.seed_edit.textChanged.connect(self._on_preset_or_seed_changed)
 
         card.setMaximumHeight(50)
         return card
@@ -547,16 +547,37 @@ class CompareView(QWidget):
         # Restart the debounce timer - will auto-apply after user stops typing
         self._input_debounce_timer.start()
 
+    def _on_preset_or_seed_changed(self) -> None:
+        """Handle preset or seed changes - auto-generate after debounce."""
+        self._dataset_ready = False
+        self._current_array = None
+        # Restart the debounce timer - will auto-generate after user stops typing
+        self._input_debounce_timer.start()
+
     def _try_auto_apply_input(self) -> None:
         """Attempt to parse and apply the current input text automatically."""
-        try:
-            parsed = self._parse_array_input()
-            if parsed and len(parsed) > 0:
-                self._apply_array(parsed)
-                self._dataset_ready = True
-        except (ValueError, TypeError):
-            # Invalid input, do nothing
-            pass
+        # Check if we should use manual input or generate from preset
+        text = self.array_edit.text().strip()
+        if text:
+            # User typed manual input - use it
+            try:
+                parsed = self._parse_array_input()
+                if parsed and len(parsed) > 0:
+                    # Mark as custom input (no preset/seed)
+                    self._current_preset = "custom"
+                    self._current_seed = None
+                    self._apply_array(parsed)
+                    self._dataset_ready = True
+            except (ValueError, TypeError):
+                # Invalid input, do nothing
+                pass
+        else:
+            # No manual input - generate from preset/seed
+            try:
+                self._on_generate_clicked()
+            except Exception:
+                # Generation failed, do nothing
+                pass
 
     # ------------------------------------------------------------------ slots --
 
@@ -762,6 +783,9 @@ class CompareView(QWidget):
         for state in (self._left, self._right):
             state.start_time = start_time
             state.visualizer.prime_external_run(array)
+            # Update visualizer's preset/seed to match compare window's context
+            state.visualizer._current_preset = self._current_preset
+            state.visualizer._current_seed = self._current_seed
             if state.pane is not None:
                 state.pane.reset()
                 state.pane.set_hud_visible(not state.details_button.isChecked())
