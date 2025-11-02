@@ -197,20 +197,15 @@ class Player(QObject):
     def sync_to_step(self, step_index: int) -> None:
         """Force internal timers to match an external seek operation."""
         target = max(0, int(step_index))
-        current = len(self._step_durations)
 
-        if target < current:
-            removed = self._step_durations[target:]
-            if removed:
-                self._logical_accum = max(0.0, self._logical_accum - sum(removed))
-                del self._step_durations[target:]
-        elif target > current:
-            dt = self._step_duration_nominal()
-            missing = target - current
-            if missing > 0:
-                self._step_durations.extend([dt] * missing)
-                self._logical_accum += missing * dt
+        # Recalculate logical time based on the target step index
+        dt = self._step_duration_nominal()
+        self._logical_accum = target * dt
 
+        # Rebuild the step durations list to match
+        self._step_durations = [dt] * target
+
+        # If we're at step 0, clear everything
         if target == 0:
             self._logical_accum = 0.0
             self._step_durations.clear()
@@ -224,14 +219,20 @@ class Player(QObject):
         if self._completed:
             return
         self._step_once()
+        # Ensure logical time is synced with the actual step index
+        current_step = self._step_index_cb()
+        self.sync_to_step(current_step)
 
     def step_back(self) -> None:
         if not self._capabilities.get("step_back"):
             return
         self.pause()
         if self._step_back_cb and self._step_back_cb():
-            self._record_step_back_logical()
-            self.stepped.emit(self._step_index_cb())
+            # Get the new step index after stepping back
+            current_step = self._step_index_cb()
+            # Sync logical time to match the actual step
+            self.sync_to_step(current_step)
+            self.stepped.emit(current_step)
             self._completed = False
             self.elapsed_updated.emit(self.elapsed_seconds())
             self.logical_elapsed_updated.emit(self.logical_seconds())

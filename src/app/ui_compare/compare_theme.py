@@ -63,11 +63,36 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
        CONTROL CARDS - Dark background consistent with main theme
        ======================================================================== */
 
-    QFrame#compare_card, QFrame#unified_controls {{
+    QFrame#compare_card, QFrame#dataset_card, QFrame#transport_card {{
         background-color: {bg_secondary};  /* Force dark background */
-        border: 1px solid {border_subtle};
-        border-radius: 6px;
+        border: none;  /* Remove borders to connect seamlessly */
+        border-radius: 0px;  /* No rounded corners between panels */
         padding: 4px;
+        margin: 0px;
+    }}
+
+    /* Top panel gets top corners rounded */
+    QFrame#dataset_card {{
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
+        border-top: 1px solid {border_subtle};
+        border-left: 1px solid {border_subtle};
+        border-right: 1px solid {border_subtle};
+    }}
+
+    /* Bottom panel gets bottom corners rounded */
+    QFrame#transport_card {{
+        border-bottom-left-radius: 6px;
+        border-bottom-right-radius: 6px;
+        border-bottom: 1px solid {border_subtle};
+        border-left: 1px solid {border_subtle};
+        border-right: 1px solid {border_subtle};
+    }}
+
+    /* Controls container should be transparent */
+    QWidget#controls_container {{
+        background-color: transparent;
+        border: none;
     }}
 
     QFrame {{
