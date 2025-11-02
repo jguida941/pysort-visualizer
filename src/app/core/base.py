@@ -500,7 +500,13 @@ class AlgorithmVisualizerBase(QWidget):
         self._precomputed_steps: list[Step] | None = None
         self._total_steps_known = False
 
-        # Ensure this widget really paints a dark background (not the parent’s light gray)
+        # Debounce timer for auto-applying typed input
+        self._input_debounce_timer = QTimer(self)
+        self._input_debounce_timer.setSingleShot(True)
+        self._input_debounce_timer.setInterval(500)  # 500ms delay after typing stops
+        self._input_debounce_timer.timeout.connect(self._try_auto_apply_input)
+
+        # Ensure this widget really paints a dark background (not the parent's light gray)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAutoFillBackground(True)
         pal = self.palette()
@@ -1093,6 +1099,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self.spn_fps.valueChanged.connect(self._on_fps_changed)
         self.btn_export.clicked.connect(self._on_export)
         self.btn_benchmark.clicked.connect(self._on_benchmark)
+        self.le_input.textChanged.connect(self._on_input_changed)
         self.le_input.editingFinished.connect(
             lambda: self._settings.setValue("viz/last_input", self.le_input.text())
         )
@@ -1337,6 +1344,24 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self.canvas.set_show_labels(self._show_values)
         self.canvas.update()
         self._settings.setValue("viz/show_values", int(self._show_values))
+
+    def _on_input_changed(self, text: str) -> None:
+        """Start debounce timer to auto-apply input after typing stops."""
+        # Restart the debounce timer - will auto-apply after user stops typing
+        self._input_debounce_timer.start()
+
+    def _try_auto_apply_input(self) -> None:
+        """Attempt to parse and apply the current input text automatically."""
+        text = self.le_input.text().strip()
+        if not text:
+            return
+        try:
+            parsed = self._parse_input()
+            if parsed and len(parsed) > 0:
+                self._set_array(parsed)
+        except (ValueError, TypeError):
+            # Invalid input, do nothing
+            pass
 
     def _on_randomize(self) -> None:
         try:

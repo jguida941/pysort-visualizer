@@ -23,8 +23,8 @@ A PyQt6 desktop playground for exploring classic sorting algorithms through dete
 
 ## Feature Highlights
 
-- **Single Visualizer (stable):** One tab per algorithm with synced HUD, narration, export tools, theme toggle, and keyboard/mouse controls.
-- **Compare Mode (WIP):** Launch a dual-pane workspace from the launcher to evaluate two algorithms side by side. The UI loads, but final UX polish, keyboard overrides, and replay parity are still in progress—treat this as a preview build.
+- **Single Visualizer (stable):** One tab per algorithm with synced HUD, narration, export tools, theme toggle, and keyboard/mouse controls. Manual input fields automatically apply values 500ms after you stop typing.
+- **Compare Mode (WIP):** Launch a dual-pane workspace from the launcher to evaluate two algorithms side by side. The UI loads, but final UX polish, keyboard overrides, and replay parity are still in progress—treat this as a preview build. Auto-apply input feature is available in Compare Mode.
 - **Deterministic algorithm engine:** Bubble, Insertion, Selection, Heap, Shell, Merge (bottom-up), Quick (median-of-three), Cocktail, Counting, Radix (LSD), Bucket, Comb, and a Timsort trace all register through a plugin system and emit strongly typed `Step` records.
 - **Reproducible data presets:** Generate random, nearly-sorted, reverse, reverse-run, few-unique, or already-sorted datasets with a visible seed so anyone can recreate a run exactly.
 - **Instrumented playback:** Stepping, scrubbing, and timed playback all derive from the same checkpointed replay buffer. You can always step backward or jump to any frame without drift.
@@ -67,23 +67,35 @@ pip install -r requirements.txt
 
 ### 3. Launch the app
 
-From the project root:
+From the project root, choose one of these methods:
 
+**Option A: Direct launch** (requires manual venv activation)
 ```bash
 python main.py
 ```
 
+**Option B: Automated launch script** (handles venv and dependencies automatically)
+```bash
+# macOS / Linux
+./scripts/run.sh
+
+# Or use the Python version (cross-platform)
+python scripts/run.py
+```
+
+The automated scripts (`run.sh` and `run.py`) will create the virtual environment if needed, install/update dependencies, and launch the app—ideal for quick development.
+
 You will land on the launcher window:
 
-1. **Single Visualizer** loads the production-ready tabbed workspace.  
+1. **Single Visualizer** loads the production-ready tabbed workspace.
 2. **Compare Mode** opens the in-progress dual-pane view. Use it for exploratory testing only—the UX and determinism guarantees are still being finalized.
 
 ---
 
 ## Working with the Single Visualizer
 
-- Enter comma-separated integers or click **Randomize** to use the active preset/seed.
-- Use **Play**, **Step ▶**, **Step ◀**, the timeline slider, or keyboard shortcuts to navigate. Every action replays the canonical `Step` sequence—no frame skipping.
+- Enter comma-separated integers in the input field (numbers are automatically applied 500ms after you stop typing) or click **Generate** to use the active preset/seed.
+- Use **Start**, **Step ▶**, **Step ◀**, the timeline slider, or keyboard shortcuts to navigate. Every action replays the canonical `Step` sequence—no frame skipping.
 - Toggle **Show values** at small `n` to annotate each bar.
 - Click **Export** to choose CSV, JSON, PNG, or GIF. PNG renders the current canvas. GIF synthesizes the animation from captured frames; you must play through the run first.
 - Hit **Benchmark** to produce `benchmark.csv` with wall-clock timing for every registered algorithm against the current preset (including any custom array).
@@ -168,7 +180,9 @@ UI_UPDATE_PYSORT/
 │       └── ui_shared/       # Reusable widgets, panes, themes, constants
 ├── scripts/
 │   ├── setup.sh             # macOS/Linux bootstrap (venv + pip install)
-│   └── setup.bat            # Windows bootstrap (venv + pip install)
+│   ├── setup.bat            # Windows bootstrap (venv + pip install)
+│   ├── run.sh               # macOS/Linux automated launcher (setup + run)
+│   └── run.py               # Cross-platform automated launcher (setup + run)
 ├── tests/                   # Pytest + Hypothesis suite
 ├── docs/                    # Roadmap, audits, supporting notes
 ├── native/radix_simd.cpp    # Optional SIMD prototype

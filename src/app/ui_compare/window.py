@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtCore import QSettings, Qt, QTimer
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -72,6 +72,12 @@ class CompareView(QWidget):
         self._current_preset: str = DEFAULT_PRESET_KEY
         self._dataset_ready = False
         self._status_prefix = ""
+
+        # Debounce timer for auto-applying typed input
+        self._input_debounce_timer = QTimer(self)
+        self._input_debounce_timer.setSingleShot(True)
+        self._input_debounce_timer.setInterval(500)  # 500ms delay after typing stops
+        self._input_debounce_timer.timeout.connect(self._try_auto_apply_input)
 
         algo_names = sorted(INFO.keys())
         left_default = algo_names[0]
@@ -535,8 +541,22 @@ class CompareView(QWidget):
 
 
     def _mark_dataset_dirty(self) -> None:
+        """Mark dataset as needing regeneration and start debounce timer for auto-apply."""
         self._dataset_ready = False
         self._current_array = None
+        # Restart the debounce timer - will auto-apply after user stops typing
+        self._input_debounce_timer.start()
+
+    def _try_auto_apply_input(self) -> None:
+        """Attempt to parse and apply the current input text automatically."""
+        try:
+            parsed = self._parse_array_input()
+            if parsed and len(parsed) > 0:
+                self._apply_array(parsed)
+                self._dataset_ready = True
+        except (ValueError, TypeError):
+            # Invalid input, do nothing
+            pass
 
     # ------------------------------------------------------------------ slots --
 
