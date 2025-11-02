@@ -1356,8 +1356,8 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
 
     def _try_auto_apply_input(self) -> None:
         """Attempt to parse and apply the current input text automatically."""
-        # Don't auto-apply if animation is running or has steps
-        if self.pane.is_running or self._steps:
+        # Don't auto-apply if animation is running
+        if self.pane.is_running:
             return
 
         text = self.le_input.text().strip()
