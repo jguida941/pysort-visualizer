@@ -32,3 +32,7 @@ class CompareController(QObject):
             self.left.step_back()
         if self.right.capabilities().get("step_back", False):
             self.right.step_back()
+
+    def is_running(self) -> bool:
+        """Check if either pane is currently running."""
+        return self.left.is_running or self.right.is_running
