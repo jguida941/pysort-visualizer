@@ -993,41 +993,30 @@ class CompareWindow(QMainWindow):
 
         # Handle keyboard shortcuts
         if event.key() == Qt.Key.Key_Space:
-            # Toggle play/pause for focused pane only
-            if focused_state.pane is not None:
-                if focused_state.pane.is_running:
-                    focused_state.pane.pause()
-                else:
-                    # Ensure dataset before playing
-                    if self._view._ensure_dataset():
-                        focused_state.pane.play()
+            # Toggle play/pause using controller like buttons do
+            if self._view._controller.is_running():
+                self._view._controller.toggle_pause()
+            else:
+                # Ensure dataset before playing
+                if self._view._ensure_dataset():
+                    self._view._controller.play()
 
         elif event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Comma, Qt.Key.Key_Less):
-            # Step backward for focused pane (<, Left arrow, comma)
-            if focused_state.pane is not None and focused_state.pane.player.capabilities.get(
-                "step_back", False
-            ):
-                focused_state.pane.step_back()
+            # Step backward - use the same controller as Step button
+            if self._view._ensure_dataset():
+                self._view._controller.step_back()
 
         elif event.key() in (Qt.Key.Key_Right, Qt.Key.Key_Period, Qt.Key.Key_Greater):
-            # Step forward for focused pane (>, Right arrow, period)
-            if (
-                focused_state.pane is not None
-                and self._view._ensure_dataset()
-                and (
-                    focused_state.pane.step_index() < focused_state.visualizer.total_steps()
-                    or focused_state.visualizer.total_steps() == 0
-                )
-            ):
-                focused_state.pane.step_forward()
+            # Step forward - use the same controller as Step button
+            if self._view._ensure_dataset():
+                self._view._controller.step_forward()
 
         elif event.key() == Qt.Key.Key_R:
-            # Reset focused pane
-            if focused_state.pane is not None:
-                focused_state.pane.reset()
-                # Also need to re-prime the visualization
-                if self._view._current_array is not None:
-                    focused_state.visualizer.prime_external_run(self._view._current_array)
+            # Reset using controller like Reset button does
+            self._view._controller.reset()
+            if self._view._current_array is not None:
+                for state in (self._view._left, self._view._right):
+                    state.visualizer.prime_external_run(self._view._current_array)
 
         elif event.key() == Qt.Key.Key_Tab:
             # Tab to switch focus between panes
