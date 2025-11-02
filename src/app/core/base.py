@@ -222,15 +222,15 @@ class VizConfig:
     bar_gap_px: int = 2
     padding_px: int = 10
     bg_color: str = "#0f1115"
-    bar_color: str = "#6aa0ff"
-    cmp_color: str = "#ffe08a"
-    swap_color: str = "#fa8072"
-    pivot_color: str = "#90ee90"
-    merge_color: str = "#a390ee"
-    key_color: str = "#3cd7d7"
-    shift_color: str = "#ff9f43"
-    confirm_color: str = "#62d26f"
-    hud_color: str = "#e6e6e6"
+    bar_color: str = "#4a9eff"  # Brighter blue for better visibility
+    cmp_color: str = "#fbbf24"  # Golden yellow for comparison
+    swap_color: str = "#f87171"  # Bright red for swaps
+    pivot_color: str = "#4ade80"  # Bright green for pivot
+    merge_color: str = "#a78bfa"  # Purple for merge
+    key_color: str = "#06b6d4"  # Cyan for key
+    shift_color: str = "#fb923c"  # Orange for shift
+    confirm_color: str = "#10b981"  # Emerald green for confirmed
+    hud_color: str = "#ffffff"  # Pure white for HUD text
     checkpoint_stride: int = 200  # snapshot frequency for scrub/reconstruct
 
     @staticmethod

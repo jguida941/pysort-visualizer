@@ -33,9 +33,11 @@ from app.algos.registry import INFO, REGISTRY, load_all_algorithms
 from app.core.base import AlgorithmVisualizerBase
 from app.presets import DEFAULT_PRESET_KEY, generate_dataset, get_presets
 from app.ui_compare.controller import CompareController
+from app.ui_compare.compare_theme import apply_compare_theme
 from app.ui_shared.constants import APP_NAME, ORG_NAME
 from app.ui_shared.pane import Pane
 from app.ui_shared.theme import apply_global_tooltip_theme
+from app.ui_shared.design_system import SPACING, COLORS
 
 load_all_algorithms()
 
@@ -179,9 +181,10 @@ class CompareView(QWidget):
 
     def _build_ui(self, algo_names: list[str]) -> None:
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(14)
+        root.setContentsMargins(8, 8, 8, 8)  # Reduced margins for more space
+        root.setSpacing(8)  # Reduced spacing for more compactness
 
+        # Hide/Show controls button
         controls_header = QHBoxLayout()
         controls_header.setContentsMargins(0, 0, 0, 0)
         controls_header.setSpacing(8)
@@ -197,14 +200,20 @@ class CompareView(QWidget):
         controls_header.addStretch(1)
         root.addLayout(controls_header)
 
+        # Create a vertical layout for control panels
+        self.controls_container = QWidget()
+        controls_layout = QVBoxLayout(self.controls_container)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(8)
+
+        # Add dataset card and transport card vertically
         self.dataset_card = self._build_dataset_card(algo_names)
         self.transport_card = self._build_transport_card()
-        self.controls_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.controls_splitter.addWidget(self.dataset_card)
-        self.controls_splitter.addWidget(self.transport_card)
-        self.controls_splitter.setStretchFactor(0, 1)
-        self.controls_splitter.setStretchFactor(1, 1)
-        root.addWidget(self.controls_splitter)
+
+        controls_layout.addWidget(self.dataset_card)
+        controls_layout.addWidget(self.transport_card)
+
+        root.addWidget(self.controls_container)
 
         self.status_strip = QLabel()
         self.status_strip.setObjectName("compare_status")
@@ -227,49 +236,84 @@ class CompareView(QWidget):
 
     def _build_dataset_card(self, algo_names: list[str]) -> QFrame:
         card = self._make_card()
-        layout = QGridLayout(card)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setHorizontalSpacing(10)
-        layout.setVerticalSpacing(8)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(SPACING["sm"], SPACING["sm"], SPACING["sm"], SPACING["sm"])
+        layout.setSpacing(SPACING["md"])
 
-        lbl_left = QLabel("Left algorithm:")
-        lbl_right = QLabel("Right algorithm:")
+        # Left side - Algorithm selectors
+        algo_section = QHBoxLayout()
+        algo_section.setSpacing(SPACING["sm"])
+
+        lbl_left = QLabel("Left:")
+        lbl_left.setObjectName("control_label")
         self.left_combo = QComboBox()
-        self.right_combo = QComboBox()
-        for combo in (self.left_combo, self.right_combo):
-            for name in algo_names:
-                combo.addItem(name, name)
+        self.left_combo.setObjectName("algo_selector")
+        self.left_combo.setMinimumWidth(150)
+        for name in algo_names:
+            self.left_combo.addItem(name, name)
 
-        lbl_array = QLabel("Array values:")
+        lbl_right = QLabel("Right:")
+        lbl_right.setObjectName("control_label")
+        self.right_combo = QComboBox()
+        self.right_combo.setObjectName("algo_selector")
+        self.right_combo.setMinimumWidth(150)
+        for name in algo_names:
+            self.right_combo.addItem(name, name)
+
+        algo_section.addWidget(lbl_left)
+        algo_section.addWidget(self.left_combo)
+        algo_section.addWidget(lbl_right)
+        algo_section.addWidget(self.right_combo)
+
+        # Middle - Array input and preset
+        data_section = QHBoxLayout()
+        data_section.setSpacing(SPACING["sm"])
+
+        lbl_array = QLabel("Array:")
+        lbl_array.setObjectName("control_label")
         self.array_edit = QLineEdit()
-        self.array_edit.setPlaceholderText("e.g. 4,1,3,2")
-        self.array_edit.setMinimumHeight(28)
+        self.array_edit.setObjectName("array_input")
+        self.array_edit.setPlaceholderText("e.g., 5,2,9,1,5,6")
+        self.array_edit.setMinimumWidth(200)
 
         lbl_preset = QLabel("Preset:")
+        lbl_preset.setObjectName("control_label")
         self.preset_combo = QComboBox()
+        self.preset_combo.setObjectName("preset_selector")
+        self.preset_combo.setMinimumWidth(120)
         for preset in get_presets():
             self.preset_combo.addItem(preset.label, preset.key)
 
+        data_section.addWidget(lbl_array)
+        data_section.addWidget(self.array_edit)
+        data_section.addWidget(lbl_preset)
+        data_section.addWidget(self.preset_combo)
+
+        # Right side - Seed and Generate
+        gen_section = QHBoxLayout()
+        gen_section.setSpacing(SPACING["sm"])
+
         lbl_seed = QLabel("Seed:")
+        lbl_seed.setObjectName("control_label")
         self.seed_edit = QLineEdit()
+        self.seed_edit.setObjectName("seed_input")
         self.seed_edit.setPlaceholderText("auto")
-        self.seed_edit.setFixedWidth(120)
-        self.seed_edit.setMinimumHeight(28)
+        self.seed_edit.setFixedWidth(100)
 
-        self.generate_button = QPushButton("Generate dataset")
-        self.generate_button.setMinimumHeight(32)
+        self.generate_button = QPushButton("Generate")
+        self.generate_button.setObjectName("generate_button")
+        self.generate_button.setFixedWidth(100)
 
-        layout.addWidget(lbl_left, 0, 0)
-        layout.addWidget(self.left_combo, 0, 1)
-        layout.addWidget(lbl_right, 0, 2)
-        layout.addWidget(self.right_combo, 0, 3)
-        layout.addWidget(lbl_array, 1, 0)
-        layout.addWidget(self.array_edit, 1, 1, 1, 3)
-        layout.addWidget(lbl_preset, 2, 0)
-        layout.addWidget(self.preset_combo, 2, 1)
-        layout.addWidget(lbl_seed, 2, 2)
-        layout.addWidget(self.seed_edit, 2, 3)
-        layout.addWidget(self.generate_button, 3, 0, 1, 4)
+        gen_section.addWidget(lbl_seed)
+        gen_section.addWidget(self.seed_edit)
+        gen_section.addWidget(self.generate_button)
+
+        # Add all sections
+        layout.addLayout(algo_section)
+        layout.addStretch()
+        layout.addLayout(data_section)
+        layout.addStretch()
+        layout.addLayout(gen_section)
 
         self.left_combo.currentIndexChanged.connect(self._on_left_algo_changed)
         self.right_combo.currentIndexChanged.connect(self._on_right_algo_changed)
@@ -278,44 +322,73 @@ class CompareView(QWidget):
         self.preset_combo.currentIndexChanged.connect(self._mark_dataset_dirty)
         self.seed_edit.textChanged.connect(self._mark_dataset_dirty)
 
-        card.setMaximumHeight(140)
+        card.setMaximumHeight(60)  # Compact single row height
         return card
 
     def _build_transport_card(self) -> QFrame:
         card = self._make_card()
-        layout = QGridLayout(card)
-        layout.setContentsMargins(16, 10, 16, 10)
-        layout.setHorizontalSpacing(8)
-        layout.setVerticalSpacing(8)
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(SPACING["md"], SPACING["sm"], SPACING["md"], SPACING["sm"])
+        layout.setSpacing(SPACING["md"])  # More spacing between sections
+
+        # Transport buttons section - with proper spacing
+        button_section = QHBoxLayout()
+        button_section.setSpacing(SPACING["sm"])  # Increased spacing between buttons
 
         self.start_button = QPushButton("Start")
-        self.pause_button = QPushButton("Pause / Resume")
-        self.reset_button = QPushButton("Reset")
-        self.step_back_button = QPushButton("Step ◀")
-        self.step_forward_button = QPushButton("Step ▶")
+        self.start_button.setObjectName("transport_button")
 
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.setObjectName("transport_button")
+
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.setObjectName("transport_button")
+
+        self.step_back_button = QPushButton("Step")
+        self.step_back_button.setObjectName("transport_button")
+
+        self.step_forward_button = QPushButton("Step")
+        self.step_forward_button.setObjectName("transport_button")
+
+        button_section.addWidget(self.start_button)
+        button_section.addWidget(self.pause_button)
+        button_section.addWidget(self.reset_button)
+        button_section.addWidget(self.step_back_button)
+        button_section.addWidget(self.step_forward_button)
+
+        # FPS control section
+        fps_section = QHBoxLayout()
+        fps_section.setSpacing(SPACING["sm"])
+
+        fps_label = QLabel("FPS:")
+        fps_label.setObjectName("control_label")
         self.fps_slider = QSlider(Qt.Orientation.Horizontal)
         self.fps_slider.setRange(1, 60)
         self.fps_slider.setValue(24)
+        self.fps_slider.setFixedWidth(200)  # Wider for better control
+
         self.fps_spin = QSpinBox()
         self.fps_spin.setRange(1, 60)
         self.fps_spin.setValue(24)
         self.fps_spin.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        self.fps_spin.setFixedWidth(60)
+        self.fps_spin.setFixedWidth(50)
+        self.fps_spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        fps_section.addWidget(fps_label)
+        fps_section.addWidget(self.fps_slider)
+        fps_section.addWidget(self.fps_spin)
+
+        # Show values checkbox
         self.show_values_check = QCheckBox("Show values")
+        self.show_values_check.setObjectName("control_checkbox")
 
-        layout.addWidget(self.start_button, 0, 0)
-        layout.addWidget(self.pause_button, 0, 1)
-        layout.addWidget(self.reset_button, 0, 2)
-        layout.addWidget(self.step_back_button, 0, 3)
-        layout.addWidget(self.step_forward_button, 0, 4)
+        # Add all sections to main layout with proper spacing
+        layout.addLayout(button_section)
+        layout.addStretch(1)  # Add flexible space
+        layout.addLayout(fps_section)
+        layout.addWidget(self.show_values_check)
 
-        layout.addWidget(QLabel("FPS:"), 1, 0)
-        layout.addWidget(self.fps_slider, 1, 1, 1, 3)
-        layout.addWidget(self.fps_spin, 1, 4)
-        layout.addWidget(self.show_values_check, 2, 0, 1, 5)
-
+        # Connect signals
         self.start_button.clicked.connect(self._on_start_clicked)
         self.pause_button.clicked.connect(self._on_pause_clicked)
         self.reset_button.clicked.connect(self._on_reset_clicked)
@@ -325,39 +398,64 @@ class CompareView(QWidget):
         self.fps_spin.valueChanged.connect(self._on_fps_changed)
         self.show_values_check.toggled.connect(self._on_show_values_toggled)
 
-        card.setMaximumHeight(120)
+        card.setMaximumHeight(60)  # Compact single row height
         self._update_transport_capabilities()
         return card
 
     def _compose_pane(self, state: _SideState) -> QWidget:
         container = QWidget()
+        container.setObjectName("compare_pane_container")
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(6, 6, 6, 6)
-        layout.setSpacing(6)
+        layout.setContentsMargins(SPACING["sm"], SPACING["sm"], SPACING["sm"], SPACING["sm"])
+        layout.setSpacing(SPACING["xs"])
 
+        # Header with title and details toggle
         header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(SPACING["xs"])
+
         title = QLabel(state.name)
         title.setObjectName("compare_pane_title")
         state.title_label = title
+
+        # Style the details button properly
+        state.details_button.setObjectName("details_toggle")
+        state.details_button.setToolTip("Toggle algorithm details panel")
+
         header_row.addWidget(title)
         header_row.addStretch(1)
         header_row.addWidget(state.details_button)
         layout.addLayout(header_row)
 
+        # Status row with better styling
         status_row = QHBoxLayout()
         status_row.setContentsMargins(0, 0, 0, 0)
-        status_row.setSpacing(6)
+        status_row.setSpacing(SPACING["sm"])
+
         step_label = QLabel("Step 0/?")
+        step_label.setObjectName("compare_pane_status")
         elapsed_label = QLabel("Visual 0.00s · True 0.00s")
+        elapsed_label.setObjectName("compare_pane_status")
+
         state.step_label = step_label
         state.elapsed_label = elapsed_label
+
         status_row.addWidget(step_label)
         status_row.addStretch(1)
         status_row.addWidget(elapsed_label)
         layout.addLayout(status_row)
 
+        # Add visual separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setObjectName("pane_separator")
+        separator.setStyleSheet(f"background: {COLORS['border_subtle']}; height: 1px;")
+        layout.addWidget(separator)
+
+        # Main visualization area
         layout.addWidget(state.splitter, 1)
 
+        # Setup focus handling for the canvas
         canvas = getattr(state.visualizer, "canvas", None)
         if canvas is not None:
             canvas.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -494,7 +592,7 @@ class CompareView(QWidget):
         self._set_detail_state(state, checked, persist=True)
 
     def _on_controls_toggled(self, hidden: bool) -> None:
-        self.controls_splitter.setVisible(not hidden)
+        self.controls_container.setVisible(not hidden)
         icon = (
             self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarUnshadeButton)
             if hidden
@@ -831,71 +929,7 @@ class CompareView(QWidget):
 
     def apply_theme(self, theme: str) -> None:
         self._apply_theme_to_panes(theme)
-        if theme == "high-contrast":
-            style = """
-QWidget#compare_root {
-  background: #f0f2f8;
-}
-#compare_card {
-  background: #ffffff;
-  border: 1px solid rgba(15,111,255,0.45);
-  border-radius: 10px;
-}
-QLabel { color: #0b1e44; }
-QLabel#compare_hint { color: #0b1e44; font-size: 12px; }
-QLabel#compare_status { color: #0b1e44; font-weight: 600; }
-QLabel#compare_pane_title { font-weight: 600; font-size: 14px; }
-QLineEdit, QComboBox, QSpinBox {
-  background: #ffffff;
-  border: 1px solid #0f6fff;
-  border-radius: 6px;
-  color: #0b1e44;
-  padding: 4px 6px;
-}
-QPushButton, QToolButton {
-  background: #ffffff;
-  border: 1px solid #0f6fff;
-  border-radius: 8px;
-  color: #0b1e44;
-  padding: 6px 10px;
-}
-QPushButton:hover, QToolButton:hover {
-  background: #eaf2ff;
-}
-"""
-        else:
-            style = """
-QWidget#compare_root {
-  background: #11151d;
-}
-#compare_card {
-  background: #1a2230;
-  border: 1px solid rgba(106,160,255,0.35);
-  border-radius: 10px;
-}
-QLabel { color: #cfd6e6; }
-QLabel#compare_hint { color: #8fa3c7; font-size: 12px; }
-QLabel#compare_status { color: #ffffff; font-weight: 600; }
-QLabel#compare_pane_title { font-weight: 600; font-size: 14px; color: #ffffff; }
-QLineEdit, QComboBox, QSpinBox {
-  background: #111822;
-  border: 1px solid rgba(106,160,255,0.45);
-  border-radius: 6px;
-  color: #e6efff;
-  padding: 4px 6px;
-}
-QPushButton, QToolButton {
-  background: #1f2734;
-  border: 1px solid rgba(106,160,255,0.55);
-  border-radius: 8px;
-  color: #e6e6e6;
-  padding: 6px 10px;
-}
-QPushButton:hover, QToolButton:hover {
-  background: #273246;
-}
-"""
-        self.setStyleSheet(style)
+        apply_compare_theme(self, theme)
 
     def _error(self, message: str) -> None:
         QMessageBox.critical(self, "Compare Mode", message)
