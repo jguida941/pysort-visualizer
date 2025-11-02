@@ -184,21 +184,7 @@ class CompareView(QWidget):
         root.setContentsMargins(8, 8, 8, 8)  # Reduced margins for more space
         root.setSpacing(8)  # Reduced spacing for more compactness
 
-        # Hide/Show controls button
-        controls_header = QHBoxLayout()
-        controls_header.setContentsMargins(0, 0, 0, 0)
-        controls_header.setSpacing(8)
-        self.controls_toggle = QToolButton()
-        self.controls_toggle.setText("Hide controls")
-        self.controls_toggle.setCheckable(True)
-        self.controls_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.controls_toggle.setIcon(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarShadeButton)
-        )
-        self.controls_toggle.toggled.connect(self._on_controls_toggled)
-        controls_header.addWidget(self.controls_toggle)
-        controls_header.addStretch(1)
-        root.addLayout(controls_header)
+        # Keep controls visible by default - no separate hide button needed
 
         # Create a vertical layout for control panels
         self.controls_container = QWidget()
@@ -215,10 +201,7 @@ class CompareView(QWidget):
 
         root.addWidget(self.controls_container)
 
-        self.status_strip = QLabel()
-        self.status_strip.setObjectName("compare_status")
-        self.status_strip.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        root.addWidget(self.status_strip)
+        # Remove redundant status strip - we can see the algorithms already
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self._compose_pane(self._left))
@@ -298,7 +281,7 @@ class CompareView(QWidget):
         self.seed_edit = QLineEdit()
         self.seed_edit.setObjectName("seed_input")
         self.seed_edit.setPlaceholderText("auto")
-        self.seed_edit.setFixedWidth(100)
+        self.seed_edit.setMinimumWidth(120)  # Increased width for better readability
 
         self.generate_button = QPushButton("Generate")
         self.generate_button.setObjectName("generate_button")
@@ -382,11 +365,20 @@ class CompareView(QWidget):
         self.show_values_check = QCheckBox("Show values")
         self.show_values_check.setObjectName("control_checkbox")
 
+        # Hide controls toggle with label
+        self.controls_toggle = QPushButton("▼ Hide")
+        self.controls_toggle.setCheckable(True)
+        self.controls_toggle.setToolTip("Toggle dataset controls visibility")
+        self.controls_toggle.setObjectName("transport_button")
+        self.controls_toggle.setFixedWidth(80)
+        self.controls_toggle.toggled.connect(self._on_controls_toggled)
+
         # Add all sections to main layout with proper spacing
         layout.addLayout(button_section)
         layout.addStretch(1)  # Add flexible space
         layout.addLayout(fps_section)
         layout.addWidget(self.show_values_check)
+        layout.addWidget(self.controls_toggle)
 
         # Connect signals
         self.start_button.clicked.connect(self._on_start_clicked)
@@ -406,10 +398,10 @@ class CompareView(QWidget):
         container = QWidget()
         container.setObjectName("compare_pane_container")
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(SPACING["sm"], SPACING["sm"], SPACING["sm"], SPACING["sm"])
+        layout.setContentsMargins(SPACING["xs"], SPACING["xs"], SPACING["xs"], SPACING["xs"])
         layout.setSpacing(SPACING["xs"])
 
-        # Header with title and details toggle
+        # Simple header with just title and details toggle
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
         header_row.setSpacing(SPACING["xs"])
@@ -427,30 +419,10 @@ class CompareView(QWidget):
         header_row.addWidget(state.details_button)
         layout.addLayout(header_row)
 
-        # Status row with better styling
-        status_row = QHBoxLayout()
-        status_row.setContentsMargins(0, 0, 0, 0)
-        status_row.setSpacing(SPACING["sm"])
-
-        step_label = QLabel("Step 0/?")
-        step_label.setObjectName("compare_pane_status")
-        elapsed_label = QLabel("Visual 0.00s · True 0.00s")
-        elapsed_label.setObjectName("compare_pane_status")
-
-        state.step_label = step_label
-        state.elapsed_label = elapsed_label
-
-        status_row.addWidget(step_label)
-        status_row.addStretch(1)
-        status_row.addWidget(elapsed_label)
-        layout.addLayout(status_row)
-
-        # Add visual separator
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setObjectName("pane_separator")
-        separator.setStyleSheet(f"background: {COLORS['border_subtle']}; height: 1px;")
-        layout.addWidget(separator)
+        # Remove duplicate Step and Time displays - info is in the viz already
+        # Set these to None so other code doesn't crash
+        state.step_label = None
+        state.elapsed_label = None
 
         # Main visualization area
         layout.addWidget(state.splitter, 1)
@@ -558,19 +530,8 @@ class CompareView(QWidget):
             viz.apply_theme(theme)
 
     def _update_status(self) -> None:
-        left = self._left.name
-        right = self._right.name
-        if self._current_array is None:
-            text = f"{left} vs {right} — no dataset loaded"
-        else:
-            preset_label = "Custom"
-            if self._current_preset and self._current_preset != DEFAULT_PRESET_KEY:
-                preset_label = self.preset_combo.currentText()
-            n = len(self._current_array)
-            seed_text = "auto" if self._current_seed is None else str(self._current_seed)
-            text = f"{left} vs {right} • Preset: {preset_label} • n={n} • seed={seed_text}"
-        self._status_prefix = text
-        self.status_strip.setText(text)
+        # Status info removed - it's redundant
+        pass
 
     # ------------------------------------------------------------------ detail toggles --
 
@@ -592,14 +553,10 @@ class CompareView(QWidget):
         self._set_detail_state(state, checked, persist=True)
 
     def _on_controls_toggled(self, hidden: bool) -> None:
-        self.controls_container.setVisible(not hidden)
-        icon = (
-            self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarUnshadeButton)
-            if hidden
-            else self.style().standardIcon(QStyle.StandardPixmap.SP_TitleBarShadeButton)
-        )
-        self.controls_toggle.setIcon(icon)
-        self.controls_toggle.setText("Show controls" if hidden else "Hide controls")
+        # Toggle only the dataset card visibility
+        self.dataset_card.setVisible(not hidden)
+        self.controls_toggle.setText("▲ Show" if hidden else "▼ Hide")
+        self.controls_toggle.setToolTip("Show dataset controls" if hidden else "Hide dataset controls")
 
     def _mark_dataset_dirty(self) -> None:
         self._dataset_ready = False
@@ -638,10 +595,8 @@ class CompareView(QWidget):
         self._post_toast(f"{state.name} finished.")
 
     def _post_toast(self, message: str) -> None:
-        if self._status_prefix:
-            self.status_strip.setText(f"{self._status_prefix} • {message}")
-        else:
-            self.status_strip.setText(message)
+        # Toast messages removed - status bar is gone
+        pass
 
     def _on_left_algo_changed(self, index: int) -> None:
         algo = self.left_combo.itemData(index)

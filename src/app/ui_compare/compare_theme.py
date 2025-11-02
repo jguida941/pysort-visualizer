@@ -56,17 +56,23 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
 
     QWidget {{
         background: transparent;  /* Ensure child widgets don't have white background */
+        color: {text_primary};  /* Default text color for all widgets */
     }}
 
     /* ========================================================================
        CONTROL CARDS - Dark background consistent with main theme
        ======================================================================== */
 
-    #compare_card {{
-        background: {bg_secondary};  /* Dark background */
+    QFrame#compare_card {{
+        background-color: {bg_secondary};  /* Force dark background */
         border: 1px solid {border_subtle};
         border-radius: 6px;
         padding: 4px;
+    }}
+
+    QFrame {{
+        background-color: transparent;
+        border: none;
     }}
 
     /* ========================================================================
@@ -471,7 +477,24 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
     }}
 
     QWidget#algorithm_details_card QLabel {{
+        color: {text_primary} !important;
+    }}
+
+    /* Force all labels to have proper text color */
+    QScrollArea QWidget QLabel {{
         color: {text_primary};
+        background: transparent;
+    }}
+
+    /* Details panel specific text styling */
+    QScrollArea {{
+        color: {text_primary};
+    }}
+
+    QTextEdit, QPlainTextEdit {{
+        color: {text_primary};
+        background: {bg_secondary};
+        border: 1px solid {border_subtle};
     }}
 
     QWidget#algorithm_details_card QLabel#detail_heading {{
