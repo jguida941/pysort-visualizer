@@ -1,42 +1,43 @@
 # 🧩 Sorting Algorithm Visualizer
 
-A PyQt6 desktop playground for exploring classic sorting algorithms through deterministic, step-by-step animation.<br>
-Every frame comes from a concrete Step object emitted by the algorithm, making runs reproducible, exportable, and easy to replay for teaching or research.
+A PyQt6 desktop playground for exploring classic sorting algorithms through deterministic, step-by-step animation. Every frame comes from a concrete `Step` object emitted by the algorithm, making runs reproducible, exportable, and easy to replay for teaching or research.
 
 
-## Gallery
+## Demo
 
 https://github.com/user-attachments/assets/f12479b1-5313-40b8-a8ac-8794449105e7
 
 
-## Bubble Sort  
-  <img width="1196" height="863" alt="Bubble Sort" src="https://github.com/user-attachments/assets/d0890b71-0cf3-4524-852b-1460731cac60" />
+## Algorithm Visualizations
 
-## Insertion Sort  
-  <img width="1196" height="862" alt="Insertion Sort" src="https://github.com/user-attachments/assets/3efada78-2c30-4170-8ea4-e0770952a4e0" />
-  
-### Merge Sort  
-  <img width="1198" height="870" alt="Merge Sort" src="https://github.com/user-attachments/assets/b39540ec-da03-49f7-83c7-a479b16e32f0" />
-  
-## QuickSort  
-  <img width="1192" height="869" alt="Quick Sort" src="https://github.com/user-attachments/assets/d429b449-798e-4d88-b59a-f573cc720f6b" />
-  
-## CSV Export
-  <img width="1191" height="873" alt="CSV Export" src="https://github.com/user-attachments/assets/6da7494c-9210-465f-bb83-a0428e118929" />
+### Bubble Sort
+<img width="1196" height="863" alt="Bubble Sort" src="https://github.com/user-attachments/assets/d0890b71-0cf3-4524-852b-1460731cac60" />
 
+### Insertion Sort
+<img width="1196" height="862" alt="Insertion Sort" src="https://github.com/user-attachments/assets/3efada78-2c30-4170-8ea4-e0770952a4e0" />
+
+### Merge Sort
+<img width="1198" height="870" alt="Merge Sort" src="https://github.com/user-attachments/assets/b39540ec-da03-49f7-83c7-a479b16e32f0" />
+
+### Quick Sort
+<img width="1192" height="869" alt="Quick Sort" src="https://github.com/user-attachments/assets/d429b449-798e-4d88-b59a-f573cc720f6b" />
+
+### CSV Export
+<img width="1191" height="873" alt="CSV Export" src="https://github.com/user-attachments/assets/6da7494c-9210-465f-bb83-a0428e118929" />
 
 
 ## Feature Highlights
 
 - **Single Visualizer:** One tab per algorithm with synced HUD, narration, export tools, theme toggle, and keyboard/mouse controls. Manual input fields automatically apply values 1.5 seconds after you stop typing.
-- **Compare Mode:** Launch a dual-pane workspace from the launcher to evaluate two algorithms side by side.
+- **Compare Mode (Fixed!):** Launch a dual-pane workspace from the launcher to evaluate two algorithms side by side. Recent fixes ensure proper synchronization and stepping behavior between both panes.
 - **Deterministic algorithm engine:** Bubble, Insertion, Selection, Heap, Shell, Merge (bottom-up), Quick (median-of-three), Cocktail, Counting, Radix (LSD), Bucket, Comb, and a Timsort trace all register through a plugin system and emit strongly typed `Step` records.
 - **Reproducible data presets:** Generate random, nearly-sorted, reverse, reverse-run, few-unique, or already-sorted datasets with a visible seed so anyone can recreate a run exactly.
 - **Instrumented playback:** Stepping, scrubbing, and timed playback all derive from the same checkpointed replay buffer. You can always step backward or jump to any frame without drift.
 - **Export & benchmark suite:** Export traces to CSV/JSON/PNG/GIF and run a batch benchmark that sweeps algorithms against the active dataset configuration and writes a CSV report.
+- **Metrics Verification Tool:** New `scripts/verify_metrics.py` allows offline verification of algorithm metrics including step counts, comparisons, swaps, and inversion counts.
 - **Accessibility & persistence:** Dark and high-contrast themes, tooltip theming, saved window geometry, FPS, presets, and the last custom array all round-trip through `QSettings`.
 - **Robust logging:** A hardened `sys.excepthook` writes to a rotating log via `platformdirs` (if available) before surfacing runtime errors in the UI.
-
+- **Comprehensive test suite:** Over 30 test files covering UI components, algorithm correctness, keyboard shortcuts, replay determinism, export serialization, and property-based testing with Hypothesis.
 
 
 ## Quick Start
@@ -61,7 +62,7 @@ Clone the repository, then choose one of the following setup paths:
 scripts\setup.bat
 ```
 
-Both scripts create `.venv/`, activate it temporarily, and install `requirements.txt`.  
+Both scripts create `.venv/`, activate it temporarily, and install `requirements.txt`.
 Prefer manual setup? Run the equivalent commands yourself:
 
 ```bash
@@ -93,19 +94,32 @@ The automated scripts (`run.sh` and `run.py`) will create the virtual environmen
 You will land on the launcher window:
 
 1. **Single Visualizer** loads the production-ready tabbed workspace.
-2. **Compare Mode** dual-pane view. Compare different algorithms runtimes against eachother.
+2. **Compare Mode** opens a dual-pane view to compare different algorithms' runtimes against each other.
 
 
-## Working with the Single Visualizer or the Compare Visualizer
+## Working with the Single Visualizer or Compare Mode
 
+### Single Visualizer
 - Enter comma-separated integers in the input field (numbers are automatically applied 1.5 seconds after you stop typing) or click **Generate** to use the active preset/seed.
 - Use **Start**, **Step ▶**, **Step ◀**, the timeline slider, or keyboard shortcuts to navigate. Every action replays the canonical `Step` sequence—no frame skipping.
 - Toggle **Show values** at small `n` to annotate each bar.
 - Click **Export** to choose CSV, JSON, PNG, or GIF. PNG renders the current canvas. GIF synthesizes the animation from captured frames; you must play through the run first.
-- Hit **Benchmark** to produce `benchmark.csv` with wall-clock timing for every registered algorithm against the current preset (including any custom array).
+- Hit **Benchmark** to produce `benchmark.csv` with wall-clock timing for the active algorithm (three sequential seeds per preset, including any custom array).
 - The **Details** pane surfaces algorithm notes, complexity tables, and metadata pulled from the registry.
-- **View → High Contrast Mode** switches to a light theme. **View → Show Debug Panel** reveals live internals (player state, timers, recent steps) for the active tab.
 
+### Compare Mode (Recently Fixed!)
+- Launch two algorithms side by side for direct comparison
+- Synchronized playback controls affect both panes simultaneously
+- Independent algorithm selection for each pane
+- Shared dataset configuration ensures fair comparison
+- Fixed stepping behavior ensures both algorithms advance in sync
+- Perfect for teaching algorithm efficiency differences
+
+### UI Features
+- **View → High Contrast Mode** switches to a light theme
+- **View → Show Debug Panel** reveals live internals (player state, timers, recent steps) for the active tab
+- **Auto-apply input** with 1.5-second debouncing prevents accidental changes while typing
+- **Keyboard shortcuts** for all major functions (Space for play/pause, Left/Right arrows for stepping, etc.)
 
 
 ## Algorithm Catalog
@@ -119,33 +133,34 @@ You will land on the launcher window:
 | Shell Sort         | Comparison      | ✗      | ✓        | O(n log n) average                       | Uses Pratt-inspired gap sequence; shows gap comparisons distinctly. |
 | Merge Sort (BU)    | Comparison      | ✓      | ✗        | O(n log n)                              | Bottom-up merges with violet merge markers and auxiliary array snapshots. |
 | Quick Sort         | Comparison      | ✗      | ✓        | O(n log n) / O(n log n) / O(n²)         | Median-of-three pivot selection with pivot/bounds instrumentation. |
-| Cocktail Shaker    | Comparison      | ✓      | ✓        | O(n) / O(n²) / O(n²)                    | Bi-directional pass emphasises swap direction changes. |
+| Cocktail Shaker    | Comparison      | ✓      | ✓        | O(n) / O(n²) / O(n²)                    | Bi-directional pass emphasizes swap direction changes. |
 | Comb Sort          | Comparison      | ✗      | ✓        | O(n log n) average                       | Gap shrink factor 1.3 with final bubble clean-up. |
 | Counting Sort      | Non-comparison  | ✓      | ✗        | O(n + k)                                | Tracks histogram, prefix sums, and stable placements. |
 | Radix Sort (LSD)   | Non-comparison  | ✓      | ✗        | O(d (n + k))                            | Offsets negatives once then streams digit passes through Counting Sort. |
-| Bucket Sort        | Non-comparison  | ✓      | ✗        | O(n) average / O(n²) worst              | Normalizes values into buckets and sorts each with Python’s Timsort. |
-| Timsort Trace      | Hybrid          | ✓      | ✗        | O(n) / O(n log n) / O(n log n)          | Replays Python’s run-detection logic, merges, and galloping breakpoints. |
+| Bucket Sort        | Non-comparison  | ✓      | ✗        | O(n) average / O(n²) worst              | Normalizes values into buckets and sorts each with Python's Timsort. |
+| Timsort Trace      | Hybrid          | ✓      | ✗        | O(n) / O(n log n) / O(n log n)          | Replays Python's run-detection logic, merges, and galloping breakpoints. |
 
 All algorithms emit immutable `Step` objects so the UI, export system, and property tests remain in lock-step. Replaying the recorded steps produces the exact sorted output you would get from `sorted(data)`.
-
 
 
 ## Under the Hood
 
 - **Step model (`src/app/core/step.py`):** Defines the allowed operations (`compare`, `swap`, `set`, `pivot`, `merge_mark`, etc.) and enforces immutability for deterministic replay.
 - **Algorithm registry (`src/app/algos/registry.py`):** Decorators register algorithms with metadata (`stable`, `in_place`, complexity notes, description). `load_all_algorithms()` eagerly imports every module so the UI and tests can enumerate them.
-- **Visualizer base (`src/app/core/base.py`):** Contains the shared control bar, canvas rendering, checkpointed replay buffer, export/benchmark logic, preset management, narration, and log viewer hooks.
+- **Visualizer base (`src/app/core/base.py`):** Contains the shared control bar, canvas rendering, checkpointed replay buffer, export/benchmark logic, preset management, narration, and log viewer hooks. Recent updates improve UI integration and input handling.
+- **Player module (`src/app/core/player.py`):** Enhanced with proper state management and synchronization features for compare mode.
 - **Presets (`src/app/presets/__init__.py`):** Central place for dataset generators. Each preset records its key, label, description, and generator callable.
 - **UI layers:**
   - `ui_single/` holds the production tabbed window (`SuiteWindow`) and hook-up for the debug dock and theme switching.
-  - `ui_compare/` houses the compare workspace. Synchronizes seeds, playback, and presets.
-  - `ui_shared/` packages reusable widgets (pane HUD, theme helpers, constants, narration cards).
+  - `ui_compare/` houses the compare workspace with fixed synchronization and stepping logic.
+  - `ui_shared/` packages reusable widgets (pane HUD, theme helpers, constants, narration cards) with enhanced functionality.
 - **Core replay helpers (`src/app/core/player.py`, `replay.py`, `compare.py`):** Encapsulate forward/back stepping, GIF frame capture, and dual-pane synchronization.
 - **Native experiments:** `native/radix_simd.cpp` is a standalone NEON prototype for fast digit counting. It is not required for normal operation but documents future optimization ideas.
 
 
-
 ## Developer Workflow
+
+### Development Setup
 
 Install development tooling:
 
@@ -153,59 +168,132 @@ Install development tooling:
 pip install -e .[dev]
 ```
 
-Useful commands:
+### Code Quality Tools
 
 ```bash
+# Linting and formatting
 ruff check src tests
 black --check src tests
+
+# Type checking
 mypy src
+
+# Run test suite
 pytest
+
+# Run specific test categories
+pytest tests/test_compare_integration.py  # Compare mode tests
+pytest tests/test_export_serialization.py  # Export functionality tests
+pytest tests/test_ui_components.py         # UI component tests
 ```
 
-- `tests/` contains property-based checks (Hypothesis), deterministic replay validation, keyboard shortcut coverage, export serialization, and UI smoke tests.
-- `debug_controls.py` adds instrumentation widgets used by several tests—launch with `python debug_controls.py` if you need to inspect signals manually.
-- Logs live under `~/Library/Logs/org.pysort/sorting-visualizer/` on macOS or the platformdirs equivalent on other OSes. The app falls back to `./logs/` if platformdirs is unavailable.
-- `docs/ROADMAP.md` tracks upcoming milestones; `docs/audit.md` and `docs/phase.md` store UX and technical audits.
+### Metrics Verification
 
+The new `verify_metrics.py` script allows offline verification of algorithm behavior:
+
+```bash
+# Run metrics verification for specific presets and seeds
+python scripts/verify_metrics.py --preset reverse_run --seed 34554345 34554346
+
+# Output to CSV for analysis
+python scripts/verify_metrics.py --preset random --csv verify_test.csv
+```
+
+This tool helps validate that algorithms produce expected step counts, comparisons, swaps, and maintain deterministic behavior across runs.
+
+### Testing
+
+- `tests/` contains comprehensive test coverage:
+  - Property-based checks using Hypothesis
+  - Deterministic replay validation
+  - Keyboard shortcut coverage
+  - Export serialization tests (recently updated)
+  - UI smoke tests
+  - Compare mode integration tests with full stepping verification
+
+### Logging
+
+- Logs live under `~/Library/Logs/org.pysort/sorting-visualizer/` on macOS or the platformdirs equivalent on other OSes
+- The app falls back to `./logs/` if platformdirs is unavailable
+- Comprehensive error handling with rotating log files
+
+### Documentation
+
+- `docs/ROADMAP.md` tracks upcoming milestones
+- `docs/audit.md` and `docs/phase.md` store UX and technical audits
+- Inline code comments provide implementation details
 
 
 ## Repository Layout
 
 ```
-UI_UPDATE_PYSORT/
-├── main.py                  # Entry point that boots the PyQt6 application
+pysort-visualizer/                # Recently renamed from UI_UPDATE_PYSORT
+├── main.py                       # Entry point that boots the PyQt6 application
 ├── src/
 │   └── app/
-│       ├── algos/           # Algorithm implementations + registry
-│       ├── core/            # Visualization engine, replay, exports
-│       ├── presets/         # Dataset generators and metadata
-│       ├── ui_single/       # Production-ready single visualizer window
-│       ├── ui_compare/      # Experimental compare mode
-│       └── ui_shared/       # Reusable widgets, panes, themes, constants
+│       ├── algos/                # Algorithm implementations + registry
+│       │   ├── bubble.py         # Recently enhanced with better instrumentation
+│       │   ├── insertion.py      # Updated with improved step tracking
+│       │   └── ...               # 14 total algorithm implementations
+│       ├── core/                 # Visualization engine, replay, exports
+│       │   ├── base.py           # Recently refactored for better UI integration
+│       │   ├── player.py         # Enhanced with compare mode fixes
+│       │   └── ...
+│       ├── presets/              # Dataset generators and metadata
+│       ├── ui_single/            # Single visualizer window
+│       ├── ui_compare/           # Compare mode (recently fixed!)
+│       └── ui_shared/            # Reusable widgets with enhanced functionality
 ├── scripts/
-│   ├── setup.sh             # macOS/Linux bootstrap (venv + pip install)
-│   ├── setup.bat            # Windows bootstrap (venv + pip install)
-│   ├── run.sh               # macOS/Linux automated launcher (setup + run)
-│   └── run.py               # Cross-platform automated launcher (setup + run)
-├── tests/                   # Pytest + Hypothesis suite
-├── docs/                    # Roadmap, audits, supporting notes
-├── native/radix_simd.cpp    # Optional SIMD prototype
-├── requirements.txt         # Runtime dependencies
-├── pyproject.toml           # Build, lint, and type-check configuration
-└── README.md
+│   ├── setup.sh                  # macOS/Linux bootstrap (venv + pip install)
+│   ├── setup.bat                 # Windows bootstrap (venv + pip install)
+│   ├── run.sh                    # macOS/Linux automated launcher
+│   ├── run.py                    # Cross-platform automated launcher
+│   └── verify_metrics.py         # NEW: Metrics verification tool
+├── tests/                        # Comprehensive test suite (30+ test files)
+├── docs/                         # Roadmap, audits, supporting notes
+├── native/radix_simd.cpp         # Optional SIMD prototype
+├── requirements.txt              # Runtime dependencies
+├── pyproject.toml                # Build, lint, and type-check configuration
+└── README.md                     # This file
 ```
 
 
+## Recent Updates
+
+### Compare Mode Fix
+- Fixed synchronization issues between dual panes
+- Proper stepping behavior now ensures both algorithms advance correctly
+- Enhanced state management for consistent playback
+
+### Input Handling Improvements
+- Auto-apply input with 1.5-second debounce timer
+- Prevents animation restart when sorted array is detected
+- Better HUD display and input field state management
+
+### Core Module Refactoring
+- Updated `base.py` and `player.py` for better UI integration
+- Enhanced `pane.py` in ui_shared for improved functionality
+- Removed deprecated `debug_controls.py` module
+
+### New Tools
+- Added `verify_metrics.py` for offline algorithm metrics verification
+- Supports CSV output for detailed analysis
+- Validates step counts, comparisons, swaps, and inversions
+
+
 ## Roadmap & Known Gaps
+
 - **Packaging & distribution:** Installers and CI pipelines are tracked in `docs/ROADMAP.md` and not yet implemented—run from source for now.
 - **Documentation:** CONTRIBUTING guidelines and an in-depth user guide are planned. This README, roadmap, and inline code comments are the authoritative references today.
-
+- **Performance optimizations:** SIMD implementations for certain algorithms are experimental (see `native/radix_simd.cpp`).
+- **Additional algorithms:** Future additions may include Introsort, Gnome Sort, and other educational algorithms.
 
 
 ## License & Support
 
-- License: Educator Non-Commercial (see `LICENSE.txt`). Contact the maintainer for commercial usage.
-- Maintainer: **Justin Guida** — justn.guida@snhu.edu
-- Please include exported step traces (`Export → CSV`) and the RNG seed when reporting bugs.
+- **License:** Educator Non-Commercial (see `LICENSE.txt`). Contact the maintainer for commercial usage.
+- **Maintainer:** Justin Guida — justn.guida@snhu.edu
+- **Repository:** https://github.com/jguida941/pysort-visualizer (formerly UI_UPDATE_PYSORT)
+- **Bug Reports:** Please include exported step traces (`Export → CSV`) and the RNG seed when reporting bugs.
 
-Enjoy exploring the algorithms. 
+Enjoy exploring the algorithms!
