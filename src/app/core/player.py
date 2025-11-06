@@ -318,6 +318,11 @@ class Player(QObject):
     # ------------------------------------------------------------------ derived state
 
     @property
+    def visual_fps(self) -> int:
+        """Return the current target playback FPS."""
+        return self._visual_fps
+
+    @property
     def is_running(self) -> bool:
         """Check if playback is currently active.
 

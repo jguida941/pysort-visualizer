@@ -76,10 +76,10 @@ def test_benchmark_dataset_returns_entries(
     rows = visualizer._benchmark_dataset(list(original), "random", 101, 0)
     assert rows, "Benchmark returned no rows"
     first_row = rows[0]
-    # algo, run, preset, seed, n, steps, comparisons, swaps, duration_ms, sorted, error
-    assert len(first_row) == 11
+    # algo, run, preset, seed, n, steps, comparisons, swaps, duration_cpu_ms, duration_visual_ms, sorted, error
+    assert len(first_row) == 12
     assert first_row[0] == "Bubble Sort"
     assert first_row[2] == "random"
     assert first_row[3] in ("", "101", 101)
-    assert first_row[9] in (0, 1)
-    assert first_row[10] == ""
+    assert first_row[10] in (0, 1)
+    assert first_row[11] == ""

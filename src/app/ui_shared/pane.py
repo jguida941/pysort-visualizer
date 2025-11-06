@@ -92,6 +92,11 @@ class Pane(QObject):
     def sync_to_step(self, step_index: int) -> None:
         self.player.sync_to_step(step_index)
 
+    @property
+    def visual_fps(self) -> int:
+        """Expose the player's configured FPS."""
+        return self.player.visual_fps
+
     # ------------------------------------------------------------------ view helpers
 
     def set_hud_visible(self, show: bool) -> None:

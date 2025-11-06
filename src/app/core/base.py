@@ -511,9 +511,31 @@ class AlgorithmVisualizerBase(QWidget):
     - Robust UI state machine
     """
 
+    BENCHMARK_COLUMNS: list[str] = [
+        "algo",
+        "context",
+        "run",
+        "preset",
+        "seed",
+        "n",
+        "steps",
+        "comparisons",
+        "swaps",
+        "duration_cpu_ms",
+        "duration_visual_ms",
+        "duration_wall_ms",
+        "sorted",
+        "error",
+    ]
+
     title: str = "Algorithm"
     STEP_LIST_SAMPLE_RATE: int = 5
     STEP_LIST_MAX_ITEMS: int = 10_000
+
+    @classmethod
+    def benchmark_header(cls) -> list[str]:
+        """Return a copy of the benchmark CSV header."""
+        return list(cls.BENCHMARK_COLUMNS)
 
     def __init__(
         self,
@@ -586,6 +608,9 @@ class AlgorithmVisualizerBase(QWidget):
         self._shortcuts: list[QShortcut] = []
         self._current_preset = DEFAULT_PRESET_KEY
         self._current_seed: int | None = None
+        self._benchmark_next_run_id = 1
+        self._benchmark_pending_run: dict[str, Any] | None = None
+        self._benchmark_last_snapshot: dict[str, Any] | None = None
 
         # UI
         self.pane = Pane(
@@ -1006,6 +1031,11 @@ class AlgorithmVisualizerBase(QWidget):
             self._step_source = iter(step_trace)
 
         self._update_ui_state("paused")
+        dataset_snapshot = list(self._initial_array)
+        run_id = self._benchmark_next_run_id
+        self._benchmark_next_run_id += 1
+        self._benchmark_pending_run = {"dataset": dataset_snapshot, "run": run_id}
+        self._benchmark_last_snapshot = None
         self._set_narration()
 
     def apply_theme(self, theme: str) -> None:
@@ -1374,6 +1404,9 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self._step_idx = 0
         self.lst_steps.clear()
         self._append_checkpoint(0)  # checkpoint at step 0
+        if persist:
+            self._benchmark_last_snapshot = None
+        self._benchmark_pending_run = None
         self.canvas.update()
         self._update_ui_state("idle")
         self._update_scrub_ui()
@@ -1463,6 +1496,11 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self._step_source = self._generate_steps(list(self._array))
         self.pane.reset()
         self._update_ui_state("paused")
+        dataset_snapshot = list(self._initial_array) if self._initial_array else list(self._array)
+        run_id = self._benchmark_next_run_id
+        self._benchmark_next_run_id += 1
+        self._benchmark_pending_run = {"dataset": dataset_snapshot, "run": run_id}
+        self._benchmark_last_snapshot = None
         return True
 
     def _parse_input(self) -> list[int]:
@@ -1573,21 +1611,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
 
             with open(path, "w", newline="") as fh:
                 writer = csv.writer(fh)
-                writer.writerow(
-                    [
-                        "algo",
-                        "run",
-                        "preset",
-                        "seed",
-                        "n",
-                        "steps",
-                        "comparisons",
-                        "swaps",
-                        "duration_ms",
-                        "sorted",
-                        "error",
-                    ]
-                )
+                writer.writerow(self.BENCHMARK_COLUMNS)
                 writer.writerows(rows)
 
             self.txt_log.append(f"Benchmark wrote {len(rows)} rows to {path}")
@@ -1702,66 +1726,52 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         return seed
 
     def _collect_benchmark_rows(self) -> list[list[Any]]:
-        import random
+        row = self.get_last_run_benchmark_row()
+        return [row] if row else []
 
-        rows: list[list[Any]] = []
-        manual_input = self.le_input.text().strip()
-        if manual_input:
-            dataset = self._parse_input()
-            rows.extend(self._benchmark_dataset(dataset, "custom", None, 0))
-            return rows
+    def get_last_run_benchmark_row(self, context: str = "") -> list[Any] | None:
+        snapshot = self._benchmark_last_snapshot
+        if not snapshot:
+            return None
 
-        preset_key = self.cmb_preset.currentData(Qt.ItemDataRole.UserRole)
-        if not isinstance(preset_key, str):
-            preset_key = DEFAULT_PRESET_KEY
+        dataset = list(snapshot.get("dataset", []))
+        if not dataset:
+            return None
 
-        base_seed = self._resolve_seed()
-        self._settings.setValue("viz/seed", base_seed)
-        self._settings.setValue("viz/preset", preset_key)
-
-        runs = 3
-        for run_idx in range(runs):
-            run_seed = base_seed + run_idx
-            rng = random.Random(run_seed)
-            dataset = generate_dataset(
-                preset_key,
-                self.cfg.default_n,
-                self.cfg.min_val,
-                self.cfg.max_val,
-                rng,
-            )
-            rows.extend(self._benchmark_dataset(dataset, preset_key, run_seed, run_idx))
-
-        return rows
-
-    def _benchmark_dataset(
-        self,
-        dataset: list[int],
-        preset_key: str,
-        seed: int | None,
-        run_idx: int,
-    ) -> list[list[Any]]:
         expected = sorted(dataset)
-        rows: list[list[Any]] = []
-        for name in sorted(INFO.keys()):
-            algo = REGISTRY[name]
-            metrics = self._measure_algorithm(algo, list(dataset), expected)
-            rows.append(
-                [
-                    name,
-                    run_idx,
-                    preset_key,
-                    "" if seed is None else seed,
-                    len(dataset),
-                    metrics.get("steps", 0),
-                    metrics.get("comparisons", 0),
-                    metrics.get("swaps", 0),
-                    f"{metrics.get('duration_s', 0.0) * 1000:.3f}",
-                    int(metrics.get("sorted", False)),
-                    metrics.get("error", ""),
-                ]
+        metrics = self._measure_algorithm(self.algo_func, list(dataset), expected)
+
+        steps_snapshot = snapshot.get("steps", 0)
+        if metrics.get("steps") not in (None, steps_snapshot):
+            LOGGER.warning(
+                "Benchmark mismatch for %s: snapshot steps=%s, cpu steps=%s",
+                self.title,
+                steps_snapshot,
+                metrics.get("steps"),
             )
-        return rows
+
+        cpu_ms = metrics.get("duration_s", 0.0) * 1000
+        logical_ms = snapshot.get("logical_seconds", 0.0) * 1000
+        wall_ms = snapshot.get("wall_seconds", 0.0) * 1000
+
+        seed_value = snapshot.get("seed")
+        row: list[Any] = [
+            self.title,
+            context,
+            snapshot.get("run", 0),
+            snapshot.get("preset", "custom"),
+            "" if seed_value is None else seed_value,
+            len(dataset),
+            steps_snapshot,
+            snapshot.get("comparisons", 0),
+            snapshot.get("swaps", 0),
+            f"{cpu_ms:.3f}",
+            f"{logical_ms:.3f}",
+            f"{wall_ms:.3f}",
+            int(bool(snapshot.get("sorted", False))),
+            snapshot.get("error", ""),
+        ]
+        return row
 
     @staticmethod
     def _measure_algorithm(
@@ -1822,6 +1832,38 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self.canvas.update()
         self._set_narration(narration)
 
+    def _record_benchmark_snapshot(self) -> None:
+        dataset = list(self._initial_array)
+        if not dataset and self._benchmark_pending_run:
+            dataset = list(self._benchmark_pending_run.get("dataset", []))
+        if not dataset:
+            return
+
+        run_meta = self._benchmark_pending_run or {}
+        run_id = run_meta.get("run")
+        if run_id is None:
+            run_id = self._benchmark_next_run_id
+            self._benchmark_next_run_id += 1
+
+        logical_seconds = self.pane.logical_seconds()
+        wall_seconds = self.pane.elapsed_seconds()
+        sorted_flag = self._array == sorted(dataset)
+
+        self._benchmark_last_snapshot = {
+            "dataset": dataset,
+            "run": run_id,
+            "preset": self._current_preset,
+            "seed": self._current_seed,
+            "steps": len(self._steps),
+            "comparisons": self._comparisons,
+            "swaps": self._swaps,
+            "logical_seconds": logical_seconds,
+            "wall_seconds": wall_seconds,
+            "sorted": sorted_flag,
+            "error": "",
+        }
+        self._benchmark_pending_run = None
+
     def _start_finish_animation(self) -> None:
         self.txt_log.append(f"Finished. Comparisons={self._comparisons}, Swaps={self._swaps}")
         LOGGER.info(
@@ -1836,6 +1878,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
 
         # Update canvas to show numbers immediately
         self.canvas.update()
+        self._record_benchmark_snapshot()
 
         # Use a new, temporary timer for the finish sweep.
         finish_timer = QTimer(self)  # Parented to self for auto-cleanup
