@@ -175,7 +175,7 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
 
     QLineEdit:focus {{
         border-color: {accent};
-        box-shadow: 0 0 0 2px {accent}33;
+        /* box-shadow: 0 0 0 2px {accent}33; */
     }}
 
     QLineEdit:disabled {{
@@ -206,7 +206,7 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
 
     QComboBox:focus {{
         border-color: {accent};
-        box-shadow: 0 0 0 2px {accent}33;
+        /* box-shadow: 0 0 0 2px {accent}33; */
     }}
 
     QComboBox::drop-down {{
@@ -263,20 +263,20 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
         color: {text_primary};
         font-size: {FONTS['size']['sm']}px;
         font-weight: {FONTS['weight']['medium']};
-        transition: all 0.2s ease;
+        /* transition: all 0.2s ease; */
     }}
 
     QPushButton:hover {{
         background: {accent}1a;
         border-color: {accent};
-        transform: translateY(-1px);
-        box-shadow: {SHADOWS['sm']};
+        /* transform: translateY(-1px); */
+        /* box-shadow: {SHADOWS['sm']}; */
     }}
 
     QPushButton:pressed {{
         background: {accent}2d;
         border-color: {accent};
-        transform: translateY(0px);
+        /* transform: translateY(0px); */
     }}
 
     QPushButton:disabled {{
@@ -373,7 +373,7 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
     QSlider::handle:horizontal:hover {{
         background: {accent};
         border-color: {accent}33;
-        box-shadow: 0 0 0 4px {accent}1a;
+        /* box-shadow: 0 0 0 4px {accent}1a; */
     }}
 
     QSlider::sub-page:horizontal {{
@@ -400,7 +400,7 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
 
     QSpinBox:focus {{
         border-color: {accent};
-        box-shadow: 0 0 0 2px {accent}33;
+        /* box-shadow: 0 0 0 2px {accent}33; */
     }}
 
     QSpinBox::up-button, QSpinBox::down-button {{
@@ -542,7 +542,7 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
     QWidget:focus {{
         outline: none;
         border-color: {accent};
-        box-shadow: 0 0 0 2px {accent}33;
+        /* box-shadow: 0 0 0 2px {accent}33; */
     }}
 
     /* ========================================================================
@@ -550,9 +550,9 @@ def generate_compare_stylesheet(theme: str = "dark") -> str:
        ======================================================================== */
 
     * {{
-        transition-property: background, border-color, transform, box-shadow;
-        transition-duration: 0.2s;
-        transition-timing-function: ease-in-out;
+        /* transition-property: background, border-color, transform, box-shadow; */
+        /* transition-duration: 0.2s; */
+        /* transition-timing-function: ease-in-out; */
     }}
     """
 

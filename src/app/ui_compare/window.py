@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import contextlib
+import csv
 import random
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from PyQt6.QtCore import QSettings, Qt, QTimer
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -38,6 +41,7 @@ from app.ui_shared.constants import APP_NAME, ORG_NAME
 from app.ui_shared.pane import Pane
 from app.ui_shared.theme import apply_global_tooltip_theme
 from app.ui_shared.design_system import SPACING, COLORS
+from app.ui_shared.professional_theme import generate_stylesheet as generate_base_stylesheet
 
 load_all_algorithms()
 
@@ -319,6 +323,8 @@ class CompareView(QWidget):
         self.step_back_button.setObjectName("transport_button")
         self.step_forward_button = QPushButton("Step")
         self.step_forward_button.setObjectName("transport_button")
+        self.benchmark_button = QPushButton("Benchmark")
+        self.benchmark_button.setObjectName("transport_button")
 
         # FPS controls
         fps_label = QLabel("FPS:")
@@ -353,6 +359,7 @@ class CompareView(QWidget):
         layout.addWidget(self.reset_button)
         layout.addWidget(self.step_back_button)
         layout.addWidget(self.step_forward_button)
+        layout.addWidget(self.benchmark_button)
         layout.addStretch()
         layout.addWidget(fps_label)
         layout.addWidget(self.fps_slider)
@@ -369,6 +376,7 @@ class CompareView(QWidget):
         self.fps_slider.valueChanged.connect(self._on_fps_changed)
         self.fps_spin.valueChanged.connect(self._on_fps_changed)
         self.show_values_check.toggled.connect(self._on_show_values_toggled)
+        self.benchmark_button.clicked.connect(self._on_benchmark_clicked)
 
         card.setMaximumHeight(50)
         self._update_transport_capabilities()
@@ -901,6 +909,95 @@ class CompareView(QWidget):
                 state.pane.set_show_values(checked)
             else:
                 state.visualizer.set_show_values(checked)
+
+    def _collect_benchmark_row(self, state: _SideState, context: str) -> list | None:
+        if state.visualizer is None:
+            return None
+        return state.visualizer.get_last_run_benchmark_row(context=context)
+
+    def _on_benchmark_clicked(self) -> None:
+        rows: list[list[str | int | float]] = []
+        missing: list[str] = []
+        for context, state in (("left", self._left), ("right", self._right)):
+            row = self._collect_benchmark_row(state, context)
+            if row:
+                rows.append(row)
+            else:
+                missing.append(state.name)
+        if missing:
+            details = ", ".join(missing)
+            QMessageBox.warning(
+                self,
+                "Compare Benchmark",
+                f"Finish the current run on {details} before benchmarking.",
+            )
+            return
+
+        target = self._prompt_benchmark_path()
+        if target is None:
+            return
+
+        try:
+            header = AlgorithmVisualizerBase.benchmark_header()
+            with target.open("w", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(header)
+                writer.writerows(rows)
+            self._show_message(
+                QMessageBox.Icon.Information,
+                "Compare Benchmark",
+                f"Wrote {len(rows)} rows to {target}",
+            )
+        except Exception as exc:  # pragma: no cover - dialog path
+            self._show_message(QMessageBox.Icon.Critical, "Compare Benchmark", str(exc))
+
+    def _prompt_benchmark_path(self) -> Path | None:
+        # Create dialog with custom handling to avoid stylesheet issues
+        dialog = QFileDialog(self, "Save Compare Benchmark Results")
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dialog.setNameFilter("CSV (*.csv)")
+        dialog.setDefaultSuffix("csv")
+        dialog.selectFile("compare_benchmark.csv")
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        dialog.setStyleSheet(generate_base_stylesheet())
+
+        if dialog.exec() != QFileDialog.DialogCode.Accepted:
+            return None
+        target = Path(dialog.selectedFiles()[0])
+        if target.suffix.lower() != ".csv":
+            target = target.with_suffix(".csv")
+        if target.exists() and not self._confirm_overwrite(target):
+            return None
+        return target
+
+    def _confirm_overwrite(self, path: Path) -> bool:
+        result = self._show_message(
+            QMessageBox.Icon.Warning,
+            "Overwrite File?",
+            f"{path.name} already exists.\nDo you want to replace it?",
+            buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            default=QMessageBox.StandardButton.No,
+        )
+        return result == QMessageBox.StandardButton.Yes
+
+    def _show_message(
+        self,
+        icon: QMessageBox.Icon,
+        title: str,
+        text: str,
+        *,
+        buttons: QMessageBox.StandardButtons = QMessageBox.StandardButton.Ok,
+        default: QMessageBox.StandardButton | None = None,
+    ) -> QMessageBox.StandardButton:
+        box = QMessageBox(self)
+        box.setIcon(icon)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setStandardButtons(buttons)
+        if default is not None:
+            box.setDefaultButton(default)
+        box.setStyleSheet(generate_base_stylesheet())
+        return box.exec()
 
     def apply_theme(self, theme: str) -> None:
         self._apply_theme_to_panes(theme)
