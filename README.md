@@ -1,30 +1,35 @@
 # 🧩 Sorting Algorithm Visualizer
 
-> **Project status:** The **Single Visualizer** experience is production-ready. **Compare Mode** ships in this repository but is still under active development and not ready for everyday use yet.
+A PyQt6 desktop playground for exploring classic sorting algorithms through deterministic, step-by-step animation.<br>
+Every frame comes from a concrete Step object emitted by the algorithm, making runs reproducible, exportable, and easy to replay for teaching or research.
 
-A PyQt6 desktop playground for exploring classic sorting algorithms through deterministic, step-by-step animation. Every frame comes from a concrete `Step` object emitted by the algorithm, making runs reproducible, exportable, and easy to replay for teaching or research.
-
----
 
 ## Gallery
 
-- Bubble Sort  
+https://github.com/user-attachments/assets/f12479b1-5313-40b8-a8ac-8794449105e7
+
+
+## Bubble Sort  
   <img width="1196" height="863" alt="Bubble Sort" src="https://github.com/user-attachments/assets/d0890b71-0cf3-4524-852b-1460731cac60" />
-- Insertion Sort  
+
+## Insertion Sort  
   <img width="1196" height="862" alt="Insertion Sort" src="https://github.com/user-attachments/assets/3efada78-2c30-4170-8ea4-e0770952a4e0" />
-- Merge Sort  
+  
+### Merge Sort  
   <img width="1198" height="870" alt="Merge Sort" src="https://github.com/user-attachments/assets/b39540ec-da03-49f7-83c7-a479b16e32f0" />
-- Quick Sort  
+  
+## QuickSort  
   <img width="1192" height="869" alt="Quick Sort" src="https://github.com/user-attachments/assets/d429b449-798e-4d88-b59a-f573cc720f6b" />
-- CSV Export workflow  
+  
+## CSV Export
   <img width="1191" height="873" alt="CSV Export" src="https://github.com/user-attachments/assets/6da7494c-9210-465f-bb83-a0428e118929" />
 
----
+
 
 ## Feature Highlights
 
-- **Single Visualizer (stable):** One tab per algorithm with synced HUD, narration, export tools, theme toggle, and keyboard/mouse controls. Manual input fields automatically apply values 1.5 seconds after you stop typing.
-- **Compare Mode (WIP):** Launch a dual-pane workspace from the launcher to evaluate two algorithms side by side. The UI loads, but final UX polish, keyboard overrides, and replay parity are still in progress—treat this as a preview build. Auto-apply input feature is available in Compare Mode.
+- **Single Visualizer:** One tab per algorithm with synced HUD, narration, export tools, theme toggle, and keyboard/mouse controls. Manual input fields automatically apply values 1.5 seconds after you stop typing.
+- **Compare Mode:** Launch a dual-pane workspace from the launcher to evaluate two algorithms side by side.
 - **Deterministic algorithm engine:** Bubble, Insertion, Selection, Heap, Shell, Merge (bottom-up), Quick (median-of-three), Cocktail, Counting, Radix (LSD), Bucket, Comb, and a Timsort trace all register through a plugin system and emit strongly typed `Step` records.
 - **Reproducible data presets:** Generate random, nearly-sorted, reverse, reverse-run, few-unique, or already-sorted datasets with a visible seed so anyone can recreate a run exactly.
 - **Instrumented playback:** Stepping, scrubbing, and timed playback all derive from the same checkpointed replay buffer. You can always step backward or jump to any frame without drift.
@@ -32,7 +37,7 @@ A PyQt6 desktop playground for exploring classic sorting algorithms through dete
 - **Accessibility & persistence:** Dark and high-contrast themes, tooltip theming, saved window geometry, FPS, presets, and the last custom array all round-trip through `QSettings`.
 - **Robust logging:** A hardened `sys.excepthook` writes to a rotating log via `platformdirs` (if available) before surfacing runtime errors in the UI.
 
----
+
 
 ## Quick Start
 
@@ -88,11 +93,10 @@ The automated scripts (`run.sh` and `run.py`) will create the virtual environmen
 You will land on the launcher window:
 
 1. **Single Visualizer** loads the production-ready tabbed workspace.
-2. **Compare Mode** opens the in-progress dual-pane view. Use it for exploratory testing only—the UX and determinism guarantees are still being finalized.
+2. **Compare Mode** dual-pane view. Compare different algorithms runtimes against eachother.
 
----
 
-## Working with the Single Visualizer
+## Working with the Single Visualizer or the Compare Visualizer
 
 - Enter comma-separated integers in the input field (numbers are automatically applied 1.5 seconds after you stop typing) or click **Generate** to use the active preset/seed.
 - Use **Start**, **Step ▶**, **Step ◀**, the timeline slider, or keyboard shortcuts to navigate. Every action replays the canonical `Step` sequence—no frame skipping.
@@ -102,7 +106,7 @@ You will land on the launcher window:
 - The **Details** pane surfaces algorithm notes, complexity tables, and metadata pulled from the registry.
 - **View → High Contrast Mode** switches to a light theme. **View → Show Debug Panel** reveals live internals (player state, timers, recent steps) for the active tab.
 
----
+
 
 ## Algorithm Catalog
 
@@ -124,7 +128,7 @@ You will land on the launcher window:
 
 All algorithms emit immutable `Step` objects so the UI, export system, and property tests remain in lock-step. Replaying the recorded steps produces the exact sorted output you would get from `sorted(data)`.
 
----
+
 
 ## Under the Hood
 
@@ -134,12 +138,12 @@ All algorithms emit immutable `Step` objects so the UI, export system, and prope
 - **Presets (`src/app/presets/__init__.py`):** Central place for dataset generators. Each preset records its key, label, description, and generator callable.
 - **UI layers:**
   - `ui_single/` holds the production tabbed window (`SuiteWindow`) and hook-up for the debug dock and theme switching.
-  - `ui_compare/` houses the still-evolving compare workspace. It already synchronizes seeds, playback, and presets, but expect UX rough edges.
+  - `ui_compare/` houses the compare workspace. Synchronizes seeds, playback, and presets.
   - `ui_shared/` packages reusable widgets (pane HUD, theme helpers, constants, narration cards).
 - **Core replay helpers (`src/app/core/player.py`, `replay.py`, `compare.py`):** Encapsulate forward/back stepping, GIF frame capture, and dual-pane synchronization.
 - **Native experiments:** `native/radix_simd.cpp` is a standalone NEON prototype for fast digit counting. It is not required for normal operation but documents future optimization ideas.
 
----
+
 
 ## Developer Workflow
 
@@ -163,7 +167,7 @@ pytest
 - Logs live under `~/Library/Logs/org.pysort/sorting-visualizer/` on macOS or the platformdirs equivalent on other OSes. The app falls back to `./logs/` if platformdirs is unavailable.
 - `docs/ROADMAP.md` tracks upcoming milestones; `docs/audit.md` and `docs/phase.md` store UX and technical audits.
 
----
+
 
 ## Repository Layout
 
@@ -191,15 +195,12 @@ UI_UPDATE_PYSORT/
 └── README.md
 ```
 
----
 
 ## Roadmap & Known Gaps
-
-- **Compare Mode polish:** Remaining work includes narration parity with Single Visualizer, better keyboard shortcuts, synchronized benchmarking, and enhanced detail panes. Treat current Compare Mode sessions as beta quality.
 - **Packaging & distribution:** Installers and CI pipelines are tracked in `docs/ROADMAP.md` and not yet implemented—run from source for now.
 - **Documentation:** CONTRIBUTING guidelines and an in-depth user guide are planned. This README, roadmap, and inline code comments are the authoritative references today.
 
----
+
 
 ## License & Support
 
@@ -207,4 +208,4 @@ UI_UPDATE_PYSORT/
 - Maintainer: **Justin Guida** — justn.guida@snhu.edu
 - Please include exported step traces (`Export → CSV`) and the RNG seed when reporting bugs.
 
-Enjoy exploring the algorithms—and remember that Compare Mode is still maturing, so rely on the Single Visualizer for demos, classrooms, and production scenarios.
+Enjoy exploring the algorithms. 
