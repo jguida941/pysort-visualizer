@@ -34,33 +34,41 @@ def counting_sort(a: list[int]) -> Iterator[Step]:
     max_val = max(original)
     size = max_val - min_val + 1
 
-    if size > 10 * max(1, n):
+    # Use more reasonable threshold: n*log2(n) or 10*n, whichever is larger
+    import math
+    threshold = max(10 * n, int(n * math.log2(max(2, n))))
+
+    if size > threshold:
+        # Tag the fallback for honest metrics
+        yield Step("note", (), f"fallback=sorted k={size} n={n}")
         for idx, value in enumerate(sorted(original)):
             a[idx] = value
-            yield Step("set", (idx,), value)
-            yield Step("key", (idx,), value)
+            yield Step("write", (idx,), value)
         for idx in range(n):
             yield Step("confirm", (idx,))
         return
 
+    # Use offset for negative values
     offset = -min_val
 
+    # Count phase
     counts = [0] * size
     for value in original:
         counts[value + offset] += 1
 
+    # Prefix sum phase
     total = 0
     for i, cnt in enumerate(counts):
         counts[i] = total
         total += cnt
 
+    # Write phase - iterate in reverse for stability
     for value in reversed(original):
         bucket = value + offset
         position = counts[bucket]
         counts[bucket] += 1
         a[position] = value
-        yield Step("set", (position,), value)
-        yield Step("key", (position,), value)
+        yield Step("write", (position,), value)
 
     for idx in range(n):
         yield Step("confirm", (idx,))

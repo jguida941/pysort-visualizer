@@ -25,16 +25,20 @@ from typing import Any, Literal
 # - merge_mark: Mark a range being merged
 # - merge_compare: Compare two elements during merge operation
 # - confirm: Mark an element as being in its final sorted position
+# - write: Write a value to an index (similar to set but semantically clearer)
+# - note: Log a message or annotation about the algorithm's state
 Op = Literal[
     "key",
     "compare",
     "swap",
     "shift",
     "set",
+    "write",
     "pivot",
     "merge_mark",
     "merge_compare",
     "confirm",
+    "note",
 ]
 
 
