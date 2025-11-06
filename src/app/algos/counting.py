@@ -47,7 +47,7 @@ def counting_sort(a: list[int]) -> Iterator[Step]:
         yield Step("note", (), f"fallback=sorted k={size} n={n}")
         for idx, value in enumerate(sorted(original)):
             a[idx] = value
-            yield Step("write", (idx,), value)
+            yield Step("set", (idx,), value)
         for idx in range(n):
             yield Step("confirm", (idx,))
         return
@@ -71,7 +71,7 @@ def counting_sort(a: list[int]) -> Iterator[Step]:
         position = counts[bucket]
         counts[bucket] += 1
         a[position] = value
-        yield Step("write", (position,), value)
+        yield Step("set", (position,), value)
 
     for idx in range(n):
         yield Step("confirm", (idx,))

@@ -219,22 +219,56 @@ This tool helps validate that algorithms produce expected step counts, compariso
 
 ### Documentation
 
-- `docs/ROADMAP.md` tracks upcoming milestones
-- `docs/audit.md` and `docs/phase.md` store UX and technical audits
+- `docs/ARCHITECTURE.md` provides comprehensive system architecture overview
+- `docs/3D_VISUALIZATION_FEATURES.md` documents 3D visualization capabilities
 - Inline code comments provide implementation details
+
+### Feature Flags & Rollback
+
+- `USE_STEP_TRANSLATOR` enables the normalized step-to-render pipeline that both 2D and upcoming 3D
+  renderers consume. Set it before launching the app:
+  ```bash
+  USE_STEP_TRANSLATOR=1 python main.py
+  ```
+  Leaving it unset (or `0`) keeps the legacy path active.
+- `USE_3D_RENDERER` (experimental) turns on the VisPy spike that consumes `StepRenderEvent` data. Enable
+  it alongside the translator flag:
+  ```bash
+  USE_STEP_TRANSLATOR=1 USE_3D_RENDERER=1 python main.py
+  ```
+  The renderer logs its status (`3D renderer ready for N elements`) and falls back automatically if
+  VisPy is unavailable. For local debugging you can surface the VisPy canvas with
+  `VISPY_SHOW_CANVAS=1`.
+- When the translator flag is on, the HUD shows translator timing and the log records an entry such as
+  `Step translator avg=0.0123 ms over 143 steps`. On macOS logs live under
+  `~/Library/Logs/org.pysort/sorting-visualizer/`; other platforms follow the `platformdirs`
+  location, falling back to `./logs/`.
+- If a regression is reported in production, launch with `USE_STEP_TRANSLATOR=0` to fall back instantly
+  while you investigate. We’ll flip the default to `1` once the new renderer has soaked in production.
+
+### Upcoming Renderer Milestones
+
+The translator telemetry (~0.7 µs/step across algorithms) unlocks the next phase of renderer work:
+
+1. **VisPy/pyqtgraph spike** – prototype instanced bars that consume `StepRenderEvent` objects while the
+   2D canvas remains the default via the feature flag.
+2. **Dual-render integration** – add a 3D pane behind an opt-in toggle; compare translator timings and
+   frame rates with the HUD data.
+3. **Flip default & soak** – once stable, default `USE_STEP_TRANSLATOR` to `1`, keep the env flag for
+   rollback, and gather production telemetry before removing the legacy path.
 
 
 ## Repository Layout
 
 ```
-pysort-visualizer/                # Recently renamed from UI_UPDATE_PYSORT
+pysort-visualizer/                # Project root directory
 ├── main.py                       # Entry point that boots the PyQt6 application
 ├── src/
 │   └── app/
 │       ├── algos/                # Algorithm implementations + registry
 │       │   ├── bubble.py         # Recently enhanced with better instrumentation
 │       │   ├── insertion.py      # Updated with improved step tracking
-│       │   └── ...               # 14 total algorithm implementations
+│       │   └── ...               # 13 total algorithm implementations
 │       ├── core/                 # Visualization engine, replay, exports
 │       │   ├── base.py           # Recently refactored for better UI integration
 │       │   ├── player.py         # Enhanced with compare mode fixes
@@ -293,7 +327,7 @@ pysort-visualizer/                # Recently renamed from UI_UPDATE_PYSORT
 
 - **License:** Educator Non-Commercial (see `LICENSE.txt`). Contact the maintainer for commercial usage.
 - **Maintainer:** Justin Guida — justn.guida@snhu.edu
-- **Repository:** https://github.com/jguida941/pysort-visualizer (formerly UI_UPDATE_PYSORT)
+- **Repository:** https://github.com/jguida941/pysort-visualizer
 - **Bug Reports:** Please include exported step traces (`Export → CSV`) and the RNG seed when reporting bugs.
 
 Enjoy exploring the algorithms!

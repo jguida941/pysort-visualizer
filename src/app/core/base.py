@@ -47,7 +47,7 @@ import logging
 import os
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, fields
 from html import escape
@@ -61,6 +61,7 @@ from PyQt6.QtCore import QRect, QSettings, QSize, Qt, QTimer
 from PyQt6.QtGui import (
     QBrush,
     QColor,
+    QCloseEvent,
     QFontDatabase,
     QHideEvent,
     QKeySequence,
@@ -94,6 +95,8 @@ from PyQt6.QtWidgets import (
 
 from app.algos.registry import INFO, REGISTRY, AlgoInfo
 from app.core.step import Step
+from app.rendering.renderer import AbstractRenderer, NullRenderer, VispyRenderer
+from app.rendering.step_translator import StepRenderEvent, StepTranslator
 from app.presets import DEFAULT_PRESET_KEY, generate_dataset, get_preset, get_presets
 from app.ui_shared.pane import Pane
 
@@ -177,6 +180,11 @@ DEFAULT_THEME = "dark"
 PRECOMPUTE_STEP_CAP = 10_000
 
 
+def _env_flag(name: str, *, default: str = "0") -> bool:
+    raw = os.getenv(name, default)
+    return str(raw).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
 def _install_crash_hook() -> None:
     def _hook(exc_type: type[BaseException], exc: BaseException, tb: Any) -> None:
         logging.getLogger("sorting_viz").exception(
@@ -243,6 +251,7 @@ def _build_logger() -> logging.Logger:
 
 
 LOGGER = _build_logger()
+TRANSLATION_WARN_THRESHOLD_MS = 0.1  # target upper bound for step translation cost
 
 
 _install_crash_hook()
@@ -338,6 +347,12 @@ class VisualizationCanvas(QWidget):
         confirms: tuple[int, ...] = state.get("confirm", tuple())
         metrics: dict[str, Any] = state["metrics"]
         hud_visible: bool = state.get("hud_visible", True)
+        render_event: StepRenderEvent | None = state.get("render_event")
+        event_indices: set[int] = set()
+        event_brush: QBrush | None = None
+        if render_event is not None:
+            event_indices = set(render_event.indices)
+            event_brush = QBrush(QColor(render_event.color()))
 
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(self._cfg.bg_color))
@@ -381,6 +396,8 @@ class VisualizationCanvas(QWidget):
 
                 if i in confirm_idx:
                     brush = confb
+                elif event_brush is not None and i in event_indices:
+                    brush = event_brush
                 elif i in key_idx:
                     brush = keyb
                 elif i in shift_idx:
@@ -462,6 +479,7 @@ class VisualizationCanvas(QWidget):
                 preset_line = f"Preset: {preset_display}"
             logical_elapsed = metrics.get("elapsed_s", 0.0)
             wall_elapsed = metrics.get("wall_elapsed_s", logical_elapsed)
+            translator_metrics = metrics.get("translator") or {}
             hud_lines = [
                 f"Algo: {metrics.get('algo','')}",
                 preset_line,
@@ -473,6 +491,15 @@ class VisualizationCanvas(QWidget):
                     + (f" (wall {wall_elapsed:.2f}s)" if wall_elapsed else "")
                 ),
             ]
+            if (
+                translator_metrics.get("enabled")
+                and translator_metrics.get("samples", 0) > 0
+                and translator_metrics.get("avg_ms") is not None
+            ):
+                hud_lines.append(
+                    "Translator: avg "
+                    f"{translator_metrics['avg_ms']:.3f} ms | samples={translator_metrics['samples']}"
+                )
 
             fm = painter.fontMetrics()
             line_h = fm.lineSpacing()
@@ -611,6 +638,23 @@ class AlgorithmVisualizerBase(QWidget):
         self._benchmark_next_run_id = 1
         self._benchmark_pending_run: dict[str, Any] | None = None
         self._benchmark_last_snapshot: dict[str, Any] | None = None
+        # Rendering integration helpers
+        self._use_step_translator = _env_flag("USE_STEP_TRANSLATOR", default="1")
+        self._step_translator = StepTranslator()
+        self._last_render_event: StepRenderEvent | None = None
+        self._translation_elapsed: float = 0.0
+        self._translation_samples: int = 0
+
+        self._renderer3d: AbstractRenderer = NullRenderer()
+        self._use_3d_renderer = _env_flag("USE_3D_RENDERER", default="0")
+        if self._use_3d_renderer and not self._use_step_translator:
+            LOGGER.info(
+                "USE_3D_RENDERER requested; enabling step translator for event pipeline."
+            )
+            self._use_step_translator = True
+        if self._use_3d_renderer:
+            show_canvas = _env_flag("VISPY_SHOW_CANVAS", default="0")
+            self._initialize_renderer(show_canvas=show_canvas)
 
         # UI
         self.pane = Pane(
@@ -1215,6 +1259,9 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         if self._initial_array:
             self._set_array(self._initial_array, persist=False)
         self._step_source = None
+        self._last_render_event = None
+        self._translation_elapsed = 0.0
+        self._translation_samples = 0
         self.txt_log.append("Reset")
         self._update_ui_state("idle")
 
@@ -1371,9 +1418,68 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
                 "wall_elapsed_s": self.pane.elapsed_seconds(),
                 "preset": self._current_preset,
                 "seed": self._current_seed,
+                "translator": self._translator_stats(),
             },
             "hud_visible": self._hud_visible,
+            "render_event": self._last_render_event if self._use_step_translator else None,
         }
+
+    def _translator_stats(self) -> dict[str, Any]:
+        """Return aggregated translator metrics for HUD/telemetry usage."""
+        enabled = self._use_step_translator
+        samples = self._translation_samples if enabled else 0
+        avg_ms = (self._translation_elapsed / samples) * 1000 if enabled and samples else 0.0
+        return {
+            "enabled": enabled,
+            "avg_ms": avg_ms,
+            "samples": samples,
+        }
+
+    # ---------- renderer helpers
+
+    def _initialize_renderer(self, *, show_canvas: bool) -> None:
+        try:
+            self._renderer3d = VispyRenderer(show_canvas=show_canvas)
+        except Exception:
+            LOGGER.exception("Failed to initialize 3D renderer; disabling flag.")
+            self._renderer3d = NullRenderer()
+            self._use_3d_renderer = False
+        else:
+            LOGGER.info("3D renderer initialized (show_canvas=%s)", show_canvas)
+            self._reset_renderer(values=tuple(self._array))
+
+    def _reset_renderer(self, *, values: Sequence[int] | None = None) -> None:
+        if not self._use_3d_renderer:
+            return
+        n = len(values) if values is not None else len(self._array)
+        try:
+            self._renderer3d.reset(n=n, values=values)
+        except Exception:
+            LOGGER.exception("3D renderer reset failed; disabling renderer.")
+            self._disable_renderer()
+        else:
+            if n is not None:
+                LOGGER.info("3D renderer ready for %d elements", n)
+
+    def _dispatch_render_event(self, event: StepRenderEvent | None) -> None:
+        if not self._use_3d_renderer or event is None:
+            return
+        try:
+            self._renderer3d.on_step_event(event)
+        except Exception:
+            LOGGER.exception("3D renderer failed while processing event; disabling renderer.")
+            self._disable_renderer()
+
+    def _disable_renderer(self) -> None:
+        if not self._use_3d_renderer:
+            return
+        self._use_3d_renderer = False
+        try:
+            self._renderer3d.shutdown()
+        except Exception:
+            LOGGER.exception("Failed to shut down 3D renderer cleanly.")
+        finally:
+            self._renderer3d = NullRenderer()
 
     def _set_array(self, arr: list[int], *, persist: bool = True) -> None:
         if not arr:
@@ -1406,6 +1512,7 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self._append_checkpoint(0)  # checkpoint at step 0
         if persist:
             self._benchmark_last_snapshot = None
+        self._reset_renderer(values=tuple(self._array))
         self._benchmark_pending_run = None
         self.canvas.update()
         self._update_ui_state("idle")
@@ -1821,6 +1928,19 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         return True
 
     def _process_step(self, step: Step) -> None:
+        render_event: StepRenderEvent | None = None
+        if self._use_step_translator:
+            start = time.perf_counter()
+            try:
+                render_event = self._step_translator.translate(step)
+            except Exception:
+                LOGGER.exception("Failed to translate step op=%s", step.op)
+                raise
+            else:
+                self._translation_elapsed += time.perf_counter() - start
+                self._translation_samples += 1
+                self._last_render_event = render_event
+        self._dispatch_render_event(render_event)
         narration = self._narrate_step(step)
         self._apply_step(step)
         self._steps.append(step)
@@ -1831,6 +1951,11 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self._update_scrub_ui()
         self.canvas.update()
         self._set_narration(narration)
+
+    @property
+    def last_render_event(self) -> StepRenderEvent | None:
+        """Return the most recent :class:`StepRenderEvent` emitted during playback."""
+        return self._last_render_event
 
     def _record_benchmark_snapshot(self) -> None:
         dataset = list(self._initial_array)
@@ -1862,6 +1987,19 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
             "sorted": sorted_flag,
             "error": "",
         }
+        if self._use_step_translator and self._translation_samples:
+            avg_ms = (self._translation_elapsed / self._translation_samples) * 1000
+            LOGGER.info(
+                "Step translator avg=%.4f ms over %d steps",
+                avg_ms,
+                self._translation_samples,
+            )
+            if avg_ms > TRANSLATION_WARN_THRESHOLD_MS:
+                LOGGER.warning(
+                    "Step translator exceeded %.3f ms target (%.4f ms)",
+                    TRANSLATION_WARN_THRESHOLD_MS,
+                    avg_ms,
+                )
         self._benchmark_pending_run = None
 
     def _start_finish_animation(self) -> None:
@@ -2032,6 +2170,14 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
         self._update_scrub_ui()
         self.canvas.update()
 
+        if self._use_step_translator:
+            if target_idx > 0 and target_idx <= len(self._steps):
+                last_step = self._steps[target_idx - 1]
+                self._last_render_event = self._step_translator.translate(last_step)
+            else:
+                self._last_render_event = None
+        self._dispatch_render_event(self._last_render_event)
+
         if target_idx == 0:
             self._set_narration()
         else:
@@ -2098,6 +2244,12 @@ QSpinBox::up-button, QSpinBox::down-button {{ width: 0; height: 0; border: none;
             self.pane.pause()
             self.txt_log.append("Paused (auto)")
             self._update_ui_state("paused")
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self.pause_if_running()
+        with suppress(Exception):
+            self._renderer3d.shutdown()
+        super().closeEvent(event)
 
     def hideEvent(self, event: QHideEvent | None) -> None:
         self.pause_if_running()
