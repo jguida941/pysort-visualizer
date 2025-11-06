@@ -28,3 +28,11 @@ dist/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Documentation drafts (not for commit)
+docs/3D_VISUALIZATION_FEATURES.md
+docs/ARCHITECTURE.md
+docs/CODEBASE_SUMMARY.md
+docs/FEATURE_PROPOSALS.md
+docs/QUICK_START_IMPLEMENTATION.md
+3D_VISUALIZATION_ROADMAP.md

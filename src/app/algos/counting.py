@@ -1,7 +1,11 @@
+import math
 from collections.abc import Iterator
 
 from app.algos.registry import AlgoInfo, register
 from app.core.step import Step
+
+# Maximum key range to prevent huge allocations
+MAX_K = 10_000_000
 
 
 @register(
@@ -35,10 +39,10 @@ def counting_sort(a: list[int]) -> Iterator[Step]:
     size = max_val - min_val + 1
 
     # Use more reasonable threshold: n*log2(n) or 10*n, whichever is larger
-    import math
     threshold = max(10 * n, int(n * math.log2(max(2, n))))
 
-    if size > threshold:
+    # Guard against pathological ranges to avoid huge allocations
+    if size > threshold or size > MAX_K:
         # Tag the fallback for honest metrics
         yield Step("note", (), f"fallback=sorted k={size} n={n}")
         for idx, value in enumerate(sorted(original)):
@@ -56,11 +60,10 @@ def counting_sort(a: list[int]) -> Iterator[Step]:
     for value in original:
         counts[value + offset] += 1
 
-    # Prefix sum phase
+    # Prefix sum phase (exclusive prefix sum in single pass)
     total = 0
     for i, cnt in enumerate(counts):
-        counts[i] = total
-        total += cnt
+        counts[i], total = total, total + cnt
 
     # Write phase - iterate in reverse for stability
     for value in reversed(original):
